@@ -31,7 +31,7 @@ mkdir -p $APPTAINER_CACHEDIR $APPTAINER_TMPDIR
 apptainer exec --nv \
 --bind /run \
     --bind /dev/shm \
-    --bind /home/gbesset/WILLOW/holosoma-main:/workspace/holosoma \
+    --bind /home/gbesset/WILLOW/holosoma:/workspace/holosoma \
     --bind $SCRATCH/.isaac_cache:/root/.local/share/ov \
     --bind $SCRATCH/holosoma_logs:/workspace/holosoma/logs \
     --bind $SCRATCH/wandb_cache:/workspace/holosoma/wandb \
@@ -40,7 +40,7 @@ apptainer exec --nv \
     --bind $SCRATCH/isaac_pkg_data:/root/.holosoma_deps/miniconda3/envs/hssim/lib/python3.11/site-packages/isaacsim/kit/data \
     --bind $SCRATCH/isaac_pkg_logs:/root/.holosoma_deps/miniconda3/envs/hssim/lib/python3.11/site-packages/isaacsim/kit/logs \
     --bind $SCRATCH/holosoma_converted_robots:/workspace/holosoma/src/holosoma/holosoma/data/robots/converted_rank0 \
-    /home/gbesset/WILLOW/holosoma-main/apptainer/holosoma.sif bash -c "
+    /home/gbesset/WILLOW/holosoma/apptainer/holosoma.sif bash -c "
     export HTTP_PROXY=\$http_proxy && \
     export HTTPS_PROXY=\$https_proxy && \
     export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt && \

@@ -3,7 +3,7 @@
 
 ## Retargeting
 
-From `holosoma-main/` directory:
+From `holosoma/` directory:
 
 ```bash
 
@@ -63,7 +63,7 @@ apptainer exec --nv --writable-tmpfs --bind /run apptainer/holosoma.sif bash -c 
 
 ## Data conversion
 
-From `holosoma-main/` directory:
+From `holosoma/` directory:
 
 ```bash
 
@@ -169,7 +169,7 @@ apptainer exec --nv \
 apptainer exec --nv \
     --bind /run \
     --bind /dev/shm \
-    --bind /home/gbesset/WILLOW/holosoma-main/src:/workspace/holosoma/src \
+    --bind /home/gbesset/WILLOW/holosoma/src:/workspace/holosoma/src \
     --bind $SCRATCH/.isaac_cache:/root/.local/share/ov \
     --bind $SCRATCH/holosoma_logs:/workspace/holosoma/logs \
     --bind $SCRATCH/wandb_cache:/workspace/holosoma/wandb \
@@ -205,8 +205,8 @@ apptainer exec --nv --writable-tmpfs \
     --bind /dev/shm \
     --bind $SCRATCH/holosoma_logs:/workspace/holosoma/logs \
     --bind $SCRATCH/wandb_cache:/workspace/holosoma/wandb \
-    --bind /home/gbesset/WILLOW/holosoma-main/src:/workspace/holosoma/src \
-    /home/gbesset/WILLOW/holosoma-main/apptainer/holosoma.sif bash -c "
+    --bind /home/gbesset/WILLOW/holosoma/src:/workspace/holosoma/src \
+    /home/gbesset/WILLOW/holosoma/apptainer/holosoma.sif bash -c "
     source /root/.holosoma_deps/miniconda3/etc/profile.d/conda.sh && \
     conda activate hssim && \
     export MUJOCO_GL=egl && \
@@ -230,8 +230,8 @@ apptainer exec --nv --writable-tmpfs \
     --bind /dev/shm \
     --bind $SCRATCH/holosoma_logs:/workspace/holosoma/logs \
     --bind $SCRATCH/wandb_cache:/workspace/holosoma/wandb \
-    --bind /home/gbesset/WILLOW/holosoma-main/src:/workspace/holosoma/src \
-    /home/gbesset/WILLOW/holosoma-main/apptainer/holosoma.sif bash -c "
+    --bind /home/gbesset/WILLOW/holosoma/src:/workspace/holosoma/src \
+    /home/gbesset/WILLOW/holosoma/apptainer/holosoma.sif bash -c "
     source /root/.holosoma_deps/miniconda3/etc/profile.d/conda.sh && \
     conda activate hssim && \
     export MUJOCO_GL=egl && \
@@ -254,8 +254,8 @@ apptainer exec --nv --writable-tmpfs \
     --bind /dev/shm \
     --bind $SCRATCH/holosoma_logs:/workspace/holosoma/logs \
     --bind $SCRATCH/wandb_cache:/workspace/holosoma/wandb \
-    --bind /home/gbesset/WILLOW/holosoma-main/src:/workspace/holosoma/src \
-    /home/gbesset/WILLOW/holosoma-main/apptainer/holosoma.sif bash -c "
+    --bind /home/gbesset/WILLOW/holosoma/src:/workspace/holosoma/src \
+    /home/gbesset/WILLOW/holosoma/apptainer/holosoma.sif bash -c "
     source /root/.holosoma_deps/miniconda3/etc/profile.d/conda.sh && \
     conda activate hssim && \
     export MUJOCO_GL=egl && \

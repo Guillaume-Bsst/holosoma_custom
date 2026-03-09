@@ -4,6 +4,8 @@
 *.log
 * ONNX files
 *.onnx
+*.err
+*.out
 
 # IDE files
 .idea/
@@ -27,3 +29,4 @@ src/holosoma/holosoma/data/robots/converted_rank*/
 # other
 *.egg-info
 __pycache__
+*.sif

@@ -59,5 +59,5 @@ apptainer exec --nv \
         --command.setup-terms.motion-command.params.motion-config.motion-file=\"holosoma/data/motions/g1_29dof/whole_body_tracking/sub3_largebox_003_mj_w_obj.npz\" \
         --simulator.config.scene.rigid-objects.0.name=\"box\" \
         --simulator.config.scene.rigid-objects.0.urdf-path=\"src/holosoma/holosoma/data/motions/g1_29dof/whole_body_tracking/objects_largebox.urdf\" \
-        --simulator.config.scene.rigid-objects.0.position=\"[0.5,0.0,0.5]\"
+        --simulator.config.scene.rigid-objects.0.position=\"[1,0.0,1]\"
 "

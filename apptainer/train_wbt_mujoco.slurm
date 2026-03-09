@@ -11,7 +11,7 @@
 #SBATCH -p willow
 #SBATCH -A willow
 
-BASE_DIR="/home/gbesset/WILLOW/holosoma-main"
+BASE_DIR="/home/gbesset/WILLOW/holosoma"
 SCRATCH_DIR="${BASE_DIR}/scratch_space"
 TMP_DIR="${BASE_DIR}/tmp_space"
 

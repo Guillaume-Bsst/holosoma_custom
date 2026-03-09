@@ -24,7 +24,7 @@ apptainer exec --nv --writable-tmpfs \
     --bind /dev/shm \
     --bind $SCRATCH/holosoma_logs:/workspace/holosoma/logs \
     --bind $SCRATCH/wandb_cache:/workspace/holosoma/wandb \
-    /home/gbesset/WILLOW/holosoma-main/apptainer/holosoma.sif bash -c "
+    /home/gbesset/WILLOW/holosoma/apptainer/holosoma.sif bash -c "
     source /root/.holosoma_deps/miniconda3/etc/profile.d/conda.sh && \
     conda activate hssim && \
     export MUJOCO_GL=egl && \
