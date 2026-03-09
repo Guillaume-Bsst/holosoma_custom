@@ -119,7 +119,6 @@ class IsaacSim(BaseSimulator):
             num_envs=self.training_config.num_envs,
             env_spacing=self.simulator_config.scene.env_spacing,
             replicate_physics=self.simulator_config.scene.replicate_physics,
-            filter_collisions=self.simulator_config.sim.filter_collisions,
         )
         # generate scene
         with Timer("[INFO]: Time taken for scene creation", "scene_creation"):
@@ -575,7 +574,8 @@ class IsaacSim(BaseSimulator):
             If rigid_objects is an empty list
         """
         if not scene_config.rigid_objects:  # Empty list
-            raise ValueError("scene.rigid_objects is empty list - remove field or provide objects")
+            return
+            #raise ValueError("scene.rigid_objects is empty list - remove field or provide objects")
 
         usd_loader = USDFileLoader(self.sim, self.scene, self.sim_device)
         individual_objects = usd_loader.load_rigid_objects(scene_config.rigid_objects, scene_config.asset_root)
