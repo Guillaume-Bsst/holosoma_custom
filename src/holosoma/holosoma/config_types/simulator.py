@@ -387,10 +387,26 @@ class SceneConfig:
     asset_root: str | None = None
     """Optional root directory for relative asset paths."""
 
-    scene_files: list[SceneFileConfig] | None = None  # Renamed from sources
+    scene_files: list[SceneFileConfig] = field(default_factory=list) # Renamed from sources
     """List of scene files (USD/URDF) to load."""
 
-    rigid_objects: list[RigidObjectConfig] | None = None
+    rigid_objects: list[RigidObjectConfig] = field(
+        default_factory=lambda: [
+            RigidObjectConfig(
+                name="object",
+                urdf_path="src/holosoma/holosoma/data/motions/g1_29dof/whole_body_tracking/objects_largebox.urdf",
+                usd_path=None, 
+                position=[0.5, 0.0, 0.5],
+                physics=PhysicsConfig(
+                    isaacsim=IsaacSimPhysicsConfig(
+                        static_friction=1.0, 
+                        dynamic_friction=1.0, 
+                        restitution=0.0
+                    )
+                )
+            )
+        ]
+    )
     """Standalone rigid objects to instantiate."""
 
     env_spacing: float = 20.0

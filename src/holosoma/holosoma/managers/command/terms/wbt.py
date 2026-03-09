@@ -922,48 +922,123 @@ class MotionCommand(CommandTermBase):
     ) -> dict[str, torch.Tensor]:
         """Capture body states by temporarily setting the robot state in the simulator."""
         simulator = self._env.simulator
-        assert simulator.get_simulator_type() == SimulatorType.ISAACSIM, (
-            "Default-pose interpolation only supports IsaacSim; IsaacGym write_state_updates does not run FK."
-        )
-        env_id = 0
-        env_origin = simulator.scene.env_origins[env_id].to(self.device)
+        sim_type = simulator.get_simulator_type()
 
-        root_backup = simulator.robot_root_states[env_id].clone()
-        dof_pos_backup = simulator.dof_pos[env_id].clone()
-        dof_vel_backup = simulator.dof_vel[env_id].clone()
+        # ---------------------------------------------------------------------
+        # ISAAC SIM Fork
+        # ---------------------------------------------------------------------
+        if sim_type == SimulatorType.ISAACSIM:
+            env_id = 0
+            env_origin = simulator.scene.env_origins[env_id].to(self.device)
 
-        try:
-            simulator.robot_root_states[env_id, :3] = root_pos + env_origin
-            simulator.robot_root_states[env_id, 3:7] = root_quat
-            simulator.robot_root_states[env_id, 7:10] = root_lin_vel
-            simulator.robot_root_states[env_id, 10:13] = root_ang_vel
-            simulator.dof_pos[env_id] = joint_pos
-            simulator.dof_vel[env_id] = joint_vel
+            root_backup = simulator.robot_root_states[env_id].clone()
+            dof_pos_backup = simulator.dof_pos[env_id].clone()
+            dof_vel_backup = simulator.dof_vel[env_id].clone()
 
-            simulator.set_actor_root_state_tensor_robots()
-            simulator.set_dof_state_tensor_robots()
-            simulator.write_state_updates()
-            simulator.refresh_sim_tensors()
+            try:
+                simulator.robot_root_states[env_id, :3] = root_pos + env_origin
+                simulator.robot_root_states[env_id, 3:7] = root_quat
+                simulator.robot_root_states[env_id, 7:10] = root_lin_vel
+                simulator.robot_root_states[env_id, 10:13] = root_ang_vel
+                simulator.dof_pos[env_id] = joint_pos
+                simulator.dof_vel[env_id] = joint_vel
 
-            body_pos = (simulator._rigid_body_pos[env_id] - env_origin).clone()
-            body_quat = simulator._rigid_body_rot[env_id].clone()
-            body_lin_vel = simulator._rigid_body_vel[env_id].clone()
-            body_ang_vel = simulator._rigid_body_ang_vel[env_id].clone()
-        finally:
-            simulator.robot_root_states[env_id] = root_backup
-            simulator.dof_pos[env_id] = dof_pos_backup
-            simulator.dof_vel[env_id] = dof_vel_backup
-            simulator.set_actor_root_state_tensor_robots()
-            simulator.set_dof_state_tensor_robots()
-            simulator.write_state_updates()
-            simulator.refresh_sim_tensors()
+                simulator.set_actor_root_state_tensor_robots()
+                simulator.set_dof_state_tensor_robots()
+                simulator.write_state_updates()
+                simulator.refresh_sim_tensors()
 
-        return {
-            "pos": body_pos,
-            "quat": body_quat,
-            "lin_vel": body_lin_vel,
-            "ang_vel": body_ang_vel,
-        }
+                body_pos = (simulator._rigid_body_pos[env_id] - env_origin).clone()
+                body_quat = simulator._rigid_body_rot[env_id].clone()
+                body_lin_vel = simulator._rigid_body_vel[env_id].clone()
+                body_ang_vel = simulator._rigid_body_ang_vel[env_id].clone()
+            finally:
+                simulator.robot_root_states[env_id] = root_backup
+                simulator.dof_pos[env_id] = dof_pos_backup
+                simulator.dof_vel[env_id] = dof_vel_backup
+                simulator.set_actor_root_state_tensor_robots()
+                simulator.set_dof_state_tensor_robots()
+                simulator.write_state_updates()
+                simulator.refresh_sim_tensors()
+
+            return {
+                "pos": body_pos,
+                "quat": body_quat,
+                "lin_vel": body_lin_vel,
+                "ang_vel": body_ang_vel,
+            }
+
+        # ---------------------------------------------------------------------
+        # MJWARP Fork
+        # ---------------------------------------------------------------------
+        elif sim_type == SimulatorType.MUJOCO:
+            import mujoco
+            import numpy as np
+
+            mj_model = simulator.backend.model
+            mj_data = mujoco.MjData(mj_model)
+
+            if not hasattr(self, '_mj_body_ids'):
+                body_names = simulator._body_list
+                body_ids = []
+                for name in body_names:
+                    b_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, f"robot_{name}")
+                    if b_id == -1:
+                        b_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, name)
+                    
+                    if b_id == -1:
+                        logger.warning(f"[MuJoCo WBT] Body '{name}' not found, falling back to World (ID 0).")
+                        body_ids.append(0)
+                    else:
+                        body_ids.append(b_id)
+                        
+                self._mj_body_ids = np.array(body_ids, dtype=np.int32)
+                logger.info(f"[MuJoCo WBT] Fixed body mapping initialized for {len(self._mj_body_ids)} bodies.")
+
+            qpos_addr = getattr(simulator, 'robot_qpos_addr', 0)
+            qvel_addr = getattr(simulator, 'robot_qvel_addr', 0)
+            
+            mj_data.qpos[qpos_addr : qpos_addr + 3] = root_pos.detach().cpu().numpy()
+            mj_data.qpos[qpos_addr + 3 : qpos_addr + 7] = root_quat[[3, 0, 1, 2]].detach().cpu().numpy()
+            
+            joint_start = qpos_addr + 7
+            mj_data.qpos[joint_start : joint_start + joint_pos.shape[0]] = joint_pos.detach().cpu().numpy()
+
+            mj_data.qvel[qvel_addr : qvel_addr + 3] = root_lin_vel.detach().cpu().numpy()
+            mj_data.qvel[qvel_addr + 3 : qvel_addr + 6] = root_ang_vel.detach().cpu().numpy()
+            
+            joint_vel_start = qvel_addr + 6
+            mj_data.qvel[joint_vel_start : joint_vel_start + joint_vel.shape[0]] = joint_vel.detach().cpu().numpy()
+
+            mujoco.mj_kinematics(mj_model, mj_data)
+            mujoco.mj_comPos(mj_model, mj_data)
+            mujoco.mj_comVel(mj_model, mj_data)
+
+            xpos_all = mj_data.xpos[self._mj_body_ids]
+            xquat_all = mj_data.xquat[self._mj_body_ids]
+
+            body_pos_out = torch.from_numpy(xpos_all).to(self.device).float()
+            
+            body_quat_out = torch.from_numpy(xquat_all[:, [1, 2, 3, 0]]).to(self.device).float()
+
+            num_bodies = len(self._mj_body_ids)
+            obj_vels = np.zeros((num_bodies, 6), dtype=np.float64)
+            
+            for idx, b_id in enumerate(self._mj_body_ids):
+                mujoco.mj_objectVelocity(mj_model, mj_data, mujoco.mjtObj.mjOBJ_BODY, b_id, obj_vels[idx], 0)
+            
+            body_ang_vel_out = torch.from_numpy(obj_vels[:, 0:3]).to(self.device).float()
+            body_lin_vel_out = torch.from_numpy(obj_vels[:, 3:6]).to(self.device).float()
+
+            return {
+                "pos": body_pos_out,
+                "quat": body_quat_out,
+                "lin_vel": body_lin_vel_out,
+                "ang_vel": body_ang_vel_out,
+            }
+
+        else:
+            raise NotImplementedError(f"Default-pose interpolation is not supported for simulator type: {sim_type}")
 
     def _map_robot_bodies_to_motion_order(self, robot_tensor: torch.Tensor) -> torch.Tensor:
         """Map robot body tensor to motion data order using body indexes."""

@@ -1,0 +1,106 @@
+Bootstrap: docker
+From: nvcr.io/nvidia/isaac-sim:5.1.0
+
+%setup
+    mkdir -p ${APPTAINER_ROOTFS}/workspace/holosoma
+
+%files
+    . /workspace/holosoma
+
+%environment
+    export LANG=C.UTF-8
+    export DEBIAN_FRONTEND=noninteractive
+    export WORKSPACE_DIR=/workspace
+    export CONDA_ROOT=/root/.holosoma_deps/miniconda3
+    export PATH=$CONDA_ROOT/bin:$PATH
+    export MUJOCO_GL=egl
+    export PYOPENGL_PLATFORM=egl
+    export OMNI_KIT_ALLOW_ROOT=1
+
+%post
+    export LANG=C.UTF-8
+    export DEBIAN_FRONTEND=noninteractive
+    export WORKSPACE_DIR=/workspace
+    export CONDA_ROOT=/root/.holosoma_deps/miniconda3
+    export PATH=$CONDA_ROOT/bin:$PATH
+
+    apt-get update && apt-get install -y --no-install-recommends \
+        cmake build-essential swig curl wget unzip git sudo \
+        lsb-release ca-certificates \
+        xvfb libx11-6 libxext6 libxrender1 libxrandr2 libxinerama1 \
+        libxcursor1 libxdamage1 libglu1-mesa libegl1 libopengl0 libgl1 libosmesa6
+    rm -rf /var/lib/apt/lists/*
+
+    mkdir -p /root/.holosoma_deps
+    curl https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o /miniconda.sh
+    bash /miniconda.sh -b -u -p $CONDA_ROOT
+    rm /miniconda.sh
+
+    . $CONDA_ROOT/etc/profile.d/conda.sh
+    conda config --set always_yes true
+    conda config --set channel_priority strict
+    conda config --set ssl_verify false
+
+    $CONDA_ROOT/bin/pip install uv
+    ln -sf $CONDA_ROOT/bin/uv /usr/local/bin/uv
+
+    cat > /usr/local/bin/lsb_release << 'LSBEOF'
+#!/bin/bash
+case "$1" in
+    -is|-i) echo "Ubuntu" ;;
+    -rs|-r) echo "22.04" ;;
+    -cs|-c) echo "jammy" ;;
+    -a) echo -e "Distributor ID:\tUbuntu\nRelease:\t22.04\nCodename:\tjammy\nDescription:\tUbuntu 22.04 LTS" ;;
+    *) echo "Ubuntu 22.04 jammy" ;;
+esac
+LSBEOF
+    chmod +x /usr/local/bin/lsb_release
+
+    cd /workspace/holosoma
+
+    cat > /tmp/run_setup.sh << 'EOF'
+#!/bin/bash
+set -e
+
+export OS=linux
+export OS_NAME=Linux
+export DISTRIB_ID=Ubuntu
+export DISTRIB_RELEASE=22.04
+
+function pip() {
+    env UV_CONCURRENT_DOWNLOADS=4 UV_CONCURRENT_INSTALLATIONS=4 UV_NO_CACHE=1
+    uv pip "$@"
+}
+export -f pip
+
+function sudo() { "$@"; }
+export -f sudo
+
+source /root/.holosoma_deps/miniconda3/etc/profile.d/conda.sh
+
+cd /workspace/holosoma/scripts
+chmod +x *.sh
+
+    for script in *.sh; do
+        sed -i 's/\[unitree,booster\]/[unitree]/g' "$script"
+        sed -i 's/\[unitree, booster\]/[unitree]/g' "$script"
+    done
+
+    export ACCEPT_EULA=Y
+    yes Yes | ./setup_isaacsim.sh
+    ./setup_isaacgym.sh
+    ./setup_mujoco.sh --no-warp
+    ./setup_inference.sh
+    ./setup_retargeting.sh
+
+    conda activate hssim
+    pip install warp-lang mujoco-warp
+    conda deactivate
+EOF
+
+    chmod +x /tmp/run_setup.sh
+    /bin/bash /tmp/run_setup.sh
+
+%runscript
+    cd /workspace/holosoma
+    exec /bin/bash "$@"

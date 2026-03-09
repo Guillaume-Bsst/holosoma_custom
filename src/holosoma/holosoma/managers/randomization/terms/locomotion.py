@@ -954,34 +954,67 @@ def randomize_robot_rigid_body_material_startup(
         return
 
     simulator = env.simulator
-    if simulator.__class__.__name__ != "IsaacSim":
+
+    # ---------------------------------------------------------------------
+    # ISAAC SIM
+    # ---------------------------------------------------------------------
+    if simulator.__class__.__name__ == "IsaacSim":
+        try:
+            from isaaclab.managers import SceneEntityCfg
+        except ImportError as exc:  # pragma: no cover - defensive
+            raise RuntimeError("IsaacSim material randomization requires isaaclab.") from exc
+
+        env_ids_cpu = idx.to(device="cpu", dtype=torch.long)
+        if env_ids_cpu.numel() == 0:
+            return
+
+        asset_cfg = SceneEntityCfg("robot", body_names=".*")
+        asset_cfg.resolve(simulator.scene)
+
+        num_buckets = 64
+        _isaacsim_randomize_rigid_body_material(
+            simulator,
+            env_ids_cpu,
+            asset_cfg,
+            static_friction_range=(static_friction_range[0], static_friction_range[1]),
+            dynamic_friction_range=(dynamic_friction_range[0], dynamic_friction_range[1]),
+            restitution_range=(restitution_range[0], restitution_range[1]),
+            num_buckets=num_buckets,
+        )
+
+    # ---------------------------------------------------------------------
+    # MJWARP
+    # ---------------------------------------------------------------------
+    elif simulator.__class__.__name__ == "MuJoCo":
+        import mujoco
+        import numpy as np
+        mj_model = simulator.backend.model
+
+        if not hasattr(env, '_mj_robot_geom_ids'):
+            env._mj_robot_geom_ids = []
+            for i in range(mj_model.ngeom):
+                name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_GEOM, i)
+                if name and name.startswith("robot_"):
+                    env._mj_robot_geom_ids.append(i)
+            env._mj_robot_geom_ids = np.array(env._mj_robot_geom_ids, dtype=np.int32)
+            logger.info(f"[Randomization] Registered {len(env._mj_robot_geom_ids)} robot geoms for material DR.")
+
+        if len(env._mj_robot_geom_ids) == 0:
+            return
+
+        new_friction = np.random.uniform(
+            low=dynamic_friction_range[0], 
+            high=dynamic_friction_range[1]
+        )
+
+        mj_model.geom_friction[env._mj_robot_geom_ids, 0] = new_friction
+
+        mujoco.mj_setConst(mj_model, simulator.backend.data)
+
+    else:
         raise RandomizerNotSupportedError(
             f"randomize_robot_rigid_body_material_startup only supports IsaacSim, got {type(simulator).__name__}"
         )
-
-    try:
-        from isaaclab.managers import SceneEntityCfg
-    except ImportError as exc:  # pragma: no cover - defensive
-        raise RuntimeError("IsaacSim material randomization requires isaaclab.") from exc
-
-    env_ids_cpu = idx.to(device="cpu", dtype=torch.long)
-    if env_ids_cpu.numel() == 0:
-        return
-
-    asset_cfg = SceneEntityCfg("robot", body_names=".*")
-    asset_cfg.resolve(simulator.scene)
-
-    num_buckets = 64
-    _isaacsim_randomize_rigid_body_material(
-        simulator,
-        env_ids_cpu,
-        asset_cfg,
-        static_friction_range=(static_friction_range[0], static_friction_range[1]),
-        dynamic_friction_range=(dynamic_friction_range[0], dynamic_friction_range[1]),
-        restitution_range=(restitution_range[0], restitution_range[1]),
-        num_buckets=num_buckets,
-    )
-
 
 def randomize_object_rigid_body_material_startup(
     env,
@@ -1002,33 +1035,70 @@ def randomize_object_rigid_body_material_startup(
         return
 
     simulator = env.simulator
-    if simulator.__class__.__name__ != "IsaacSim":
-        raise RandomizerNotSupportedError(
-            f"randomize_object_rigid_body_material_startup only supports IsaacSim, got {type(simulator).__name__}"
+
+    # ---------------------------------------------------------------------
+    # ISAAC SIM
+    # ---------------------------------------------------------------------
+    if simulator.__class__.__name__ == "IsaacSim":
+        try:
+            from isaaclab.managers import SceneEntityCfg
+        except ImportError as exc:  # pragma: no cover - defensive
+            raise RuntimeError("IsaacSim material randomization requires isaaclab.") from exc
+
+        env_ids_cpu = idx.to(device="cpu", dtype=torch.long)
+        if env_ids_cpu.numel() == 0:
+            return
+
+        asset_cfg = SceneEntityCfg("object", body_names=".*")
+        asset_cfg.resolve(simulator.scene)
+
+        num_buckets = 64
+        _isaacsim_randomize_rigid_body_material(
+            simulator,
+            env_ids_cpu,
+            asset_cfg,
+            static_friction_range=(static_friction_range[0], static_friction_range[1]),
+            dynamic_friction_range=(dynamic_friction_range[0], dynamic_friction_range[1]),
+            restitution_range=(restitution_range[0], restitution_range[1]),
+            num_buckets=num_buckets,
         )
 
-    try:
-        from isaaclab.managers import SceneEntityCfg
-    except ImportError as exc:  # pragma: no cover - defensive
-        raise RuntimeError("IsaacSim material randomization requires isaaclab.") from exc
+    # ---------------------------------------------------------------------
+    # MJWARP
+    # ---------------------------------------------------------------------
+    elif simulator.__class__.__name__ == "MuJoCo":
+        import mujoco
+        import numpy as np
+        mj_model = simulator.backend.model
 
-    env_ids_cpu = idx.to(device="cpu", dtype=torch.long)
-    if env_ids_cpu.numel() == 0:
+        if not hasattr(env, '_mj_object_geom_ids'):
+            env._mj_object_geom_ids = []
+            for i in range(mj_model.ngeom):
+                name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_GEOM, i)
+                if name and ("box" in name or "object" in name):
+                    env._mj_object_geom_ids.append(i)
+            env._mj_object_geom_ids = np.array(env._mj_object_geom_ids, dtype=np.int32)
+            logger.info(f"[Randomization] Registered {len(env._mj_object_geom_ids)} object geoms for material DR.")
+
+        if len(env._mj_object_geom_ids) == 0:
+            logger.warning("[Randomization] No object geoms found for MuJoCo material randomization.")
+            return
+
+        new_friction = np.random.uniform(
+            low=dynamic_friction_range[0], 
+            high=dynamic_friction_range[1]
+        )
+
+        mj_model.geom_friction[env._mj_object_geom_ids, 0] = new_friction
+
+        mujoco.mj_setConst(mj_model, simulator.backend.data)
+        
         return
 
-    asset_cfg = SceneEntityCfg("object", body_names=".*")
-    asset_cfg.resolve(simulator.scene)
-
-    num_buckets = 64
-    _isaacsim_randomize_rigid_body_material(
-        simulator,
-        env_ids_cpu,
-        asset_cfg,
-        static_friction_range=(static_friction_range[0], static_friction_range[1]),
-        dynamic_friction_range=(dynamic_friction_range[0], dynamic_friction_range[1]),
-        restitution_range=(restitution_range[0], restitution_range[1]),
-        num_buckets=num_buckets,
-    )
+    else:
+        raise RandomizerNotSupportedError(
+            f"randomize_object_rigid_body_material_startup only supports IsaacSim and MuJoCo, got {type(simulator).__name__}"
+        )
 
 
 def randomize_object_rigid_body_mass_startup(
@@ -1048,31 +1118,66 @@ def randomize_object_rigid_body_mass_startup(
         return
 
     simulator = env.simulator
-    if simulator.__class__.__name__ != "IsaacSim":
-        raise RandomizerNotSupportedError(
-            f"randomize_object_rigid_body_mass_startup only supports IsaacSim, got {type(simulator).__name__}"
+
+    # ---------------------------------------------------------------------
+    # ISAAC SIM
+    # ---------------------------------------------------------------------
+    if simulator.__class__.__name__ == "IsaacSim":
+        try:
+            from isaaclab.managers import SceneEntityCfg
+
+        except ImportError as exc:  # pragma: no cover - defensive
+            raise RuntimeError("IsaacSim mass randomization requires isaaclab.") from exc
+
+        env_ids_cpu = idx.to(device="cpu", dtype=torch.long)
+        if env_ids_cpu.numel() == 0:
+            return
+
+        asset_cfg = SceneEntityCfg("object", body_names=".*")
+        asset_cfg.resolve(simulator.scene)
+
+        _isaacsim_randomize_rigid_body_mass(
+            simulator,
+            env_ids_cpu,
+            asset_cfg,
+            (mass_distribution_params[0], mass_distribution_params[1]),
+            operation="add",
         )
 
-    try:
-        from isaaclab.managers import SceneEntityCfg
 
-    except ImportError as exc:  # pragma: no cover - defensive
-        raise RuntimeError("IsaacSim mass randomization requires isaaclab.") from exc
+    # ---------------------------------------------------------------------
+    # MJWARP
+    # ---------------------------------------------------------------------
+    elif simulator.__class__.__name__ == "MuJoCo":
+        import mujoco
+        import numpy as np
+        mj_model = simulator.backend.model
 
-    env_ids_cpu = idx.to(device="cpu", dtype=torch.long)
-    if env_ids_cpu.numel() == 0:
+        if not hasattr(env, '_mj_object_body_ids'):
+            env._mj_object_body_ids = []
+            for i in range(mj_model.nbody):
+                name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_BODY, i)
+                # Recherche plus robuste (minuscules)
+                if name and ("box" in name.lower() or "object" in name.lower()):
+                    env._mj_object_body_ids.append(i)
+            logger.info(f"[Randomization] Registered {len(env._mj_object_body_ids)} object bodies for mass DR.")
+
+        if len(env._mj_object_body_ids) == 0:
+            logger.warning("[Randomization] No object bodies found for MuJoCo mass randomization.")
+            return
+
+        for body_id in env._mj_object_body_ids:
+            added_mass = np.random.uniform(mass_distribution_params[0], mass_distribution_params[1])
+            mj_model.body_mass[body_id] += added_mass
+        
+        mujoco.mj_setConst(mj_model, simulator.backend.data)
         return
 
-    asset_cfg = SceneEntityCfg("object", body_names=".*")
-    asset_cfg.resolve(simulator.scene)
 
-    _isaacsim_randomize_rigid_body_mass(
-        simulator,
-        env_ids_cpu,
-        asset_cfg,
-        (mass_distribution_params[0], mass_distribution_params[1]),
-        operation="add",
-    )
+    else:
+        raise RandomizerNotSupportedError(
+            f"randomize_object_rigid_body_mass_startup only supports IsaacSim and MuJoCo, got {type(simulator).__name__}"
+        )
 
 
 def randomize_object_rigid_body_inertia_startup(
@@ -1092,38 +1197,73 @@ def randomize_object_rigid_body_inertia_startup(
         return
 
     simulator = env.simulator
-    if simulator.__class__.__name__ != "IsaacSim":
-        raise RandomizerNotSupportedError(
-            f"randomize_object_rigid_body_inertia_startup only supports IsaacSim, got {type(simulator).__name__}"
+
+    # ---------------------------------------------------------------------
+    # ISAAC SIM
+    # ---------------------------------------------------------------------
+    if simulator.__class__.__name__ == "IsaacSim":
+        try:
+            from isaaclab.managers import SceneEntityCfg
+        except ImportError as exc:  # pragma: no cover - defensive
+            raise RuntimeError("IsaacSim inertia randomization requires isaaclab.") from exc
+
+        from holosoma.simulator.isaacsim.events import randomize_rigid_body_inertia
+
+        env_ids_cpu = idx.to(device="cpu", dtype=torch.long)
+        if env_ids_cpu.numel() == 0:
+            return
+
+        asset_cfg = SceneEntityCfg("object", body_names=".*")
+        asset_cfg.resolve(simulator.scene)
+
+        ordering = ["Ixx", "Iyy", "Izz", "Ixy", "Iyz", "Ixz"]
+        lower_bounds = [inertia_distribution_params_dict[key][0] for key in ordering]
+        upper_bounds = [inertia_distribution_params_dict[key][1] for key in ordering]
+        inertia_distribution_params = (torch.tensor(lower_bounds, device="cpu"), torch.tensor(upper_bounds, device="cpu"))
+
+        randomize_rigid_body_inertia(
+            simulator,
+            env_ids_cpu,
+            asset_cfg,
+            inertia_distribution_params,
+            operation="scale",
+            distribution="uniform",
         )
 
-    try:
-        from isaaclab.managers import SceneEntityCfg
-    except ImportError as exc:  # pragma: no cover - defensive
-        raise RuntimeError("IsaacSim inertia randomization requires isaaclab.") from exc
+    # ---------------------------------------------------------------------
+    # MJWARP
+    # ---------------------------------------------------------------------
+    if simulator.__class__.__name__ == "MuJoCo":
+        import mujoco
+        import numpy as np
+        mj_model = simulator.backend.model
 
-    from holosoma.simulator.isaacsim.events import randomize_rigid_body_inertia
+        if not hasattr(env, '_mj_object_body_ids'):
+            env._mj_object_body_ids = []
+            for i in range(mj_model.nbody):
+                name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_BODY, i)
+                if name and ("box" in name.lower() or "object" in name.lower()):
+                    env._mj_object_body_ids.append(i)
 
-    env_ids_cpu = idx.to(device="cpu", dtype=torch.long)
-    if env_ids_cpu.numel() == 0:
+        if len(env._mj_object_body_ids) == 0:
+            return
+
+        for body_id in env._mj_object_body_ids:
+            scale_xx = np.random.uniform(*inertia_distribution_params_dict["Ixx"])
+            scale_yy = np.random.uniform(*inertia_distribution_params_dict["Iyy"])
+            scale_zz = np.random.uniform(*inertia_distribution_params_dict["Izz"])
+            
+            mj_model.body_inertia[body_id, 0] *= scale_xx
+            mj_model.body_inertia[body_id, 1] *= scale_yy
+            mj_model.body_inertia[body_id, 2] *= scale_zz
+
+        mujoco.mj_setConst(mj_model, simulator.backend.data)
         return
 
-    asset_cfg = SceneEntityCfg("object", body_names=".*")
-    asset_cfg.resolve(simulator.scene)
-
-    ordering = ["Ixx", "Iyy", "Izz", "Ixy", "Iyz", "Ixz"]
-    lower_bounds = [inertia_distribution_params_dict[key][0] for key in ordering]
-    upper_bounds = [inertia_distribution_params_dict[key][1] for key in ordering]
-    inertia_distribution_params = (torch.tensor(lower_bounds, device="cpu"), torch.tensor(upper_bounds, device="cpu"))
-
-    randomize_rigid_body_inertia(
-        simulator,
-        env_ids_cpu,
-        asset_cfg,
-        inertia_distribution_params,
-        operation="scale",
-        distribution="uniform",
-    )
+    else:
+        raise RandomizerNotSupportedError(
+            f"randomize_object_rigid_body_inertia_startup only supports IsaacSim and MuJoCo, got {type(simulator).__name__}"
+        )
 
 
 def configure_torque_rfi(
