@@ -1233,7 +1233,7 @@ def randomize_object_rigid_body_inertia_startup(
     # ---------------------------------------------------------------------
     # MJWARP
     # ---------------------------------------------------------------------
-    if simulator.__class__.__name__ == "MuJoCo":
+    elif simulator.__class__.__name__ == "MuJoCo":
         import mujoco
         import numpy as np
         mj_model = simulator.backend.model
