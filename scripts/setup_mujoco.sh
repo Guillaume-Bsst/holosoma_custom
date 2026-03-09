@@ -132,7 +132,7 @@ if [[ ! -f $SENTINEL_FILE ]]; then
   echo "Installing Holosoma packages"
   pip install -U pip
   if [[ "$OS_NAME" == "Linux" ]]; then
-    pip install -e "$ROOT_DIR/src/holosoma[unitree, booster]"
+    pip install -e "$ROOT_DIR/src/holosoma[unitree]"
   elif [[ "$OS_NAME" == "Darwin" ]]; then
     echo "Warning: only unitree support for osx"
     pip install -e "$ROOT_DIR/src/holosoma[unitree]"

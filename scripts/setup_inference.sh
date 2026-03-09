@@ -82,7 +82,7 @@ if [[ ! -f $SENTINEL_FILE ]]; then
     echo "Note: Installing Unitree SDK only (Booster SDK is not supported on macOS)"
     pip install -e $ROOT_DIR/src/holosoma_inference[unitree]
   else
-    pip install -e $ROOT_DIR/src/holosoma_inference[unitree,booster]
+    pip install -e $ROOT_DIR/src/holosoma_inference[unitree]
   fi
   # Setup a few things for ARM64 Linux (G1 Jetson)
   # Otherwise we get this error:

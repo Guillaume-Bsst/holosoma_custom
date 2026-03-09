@@ -24,7 +24,7 @@ mkdir -p $SCRATCH/holosoma_converted_robots
 export APPTAINER_CACHEDIR=$SCRATCH/.apptainer_cache
 mkdir -p $APPTAINER_CACHEDIR
 
-PROJECT_ROOT="/home/gbesset/WILLOW/holosoma-main"
+PROJECT_ROOT="/home/gbesset/WILLOW/holosoma"
 SIF_FILE="$PROJECT_ROOT/apptainer/holosoma.sif"
 
 apptainer exec --nv \

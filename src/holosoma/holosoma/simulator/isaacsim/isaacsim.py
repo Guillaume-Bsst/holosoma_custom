@@ -125,7 +125,7 @@ class IsaacSim(BaseSimulator):
         print("[INFO]: Scene manager: ", self.scene)
 
         if self.simulator_config.viewer.enable_tracking:
-            viewer_config: ViewerCfg = ViewerCfg(origin_type="asset_root", asset_name="robot", eye=(0.0, -1.5, 1.5))
+            viewer_config: ViewerCfg = ViewerCfg(origin_type="asset_root", asset_name="robot")
         else:
             viewer_config: ViewerCfg = ViewerCfg()
 
@@ -525,7 +525,8 @@ class IsaacSim(BaseSimulator):
             If scene_files is an empty list
         """
         if not scene_config.scene_files:  # Empty list
-            raise ValueError("scene.scene_files is empty list - remove field or provide scene files")
+            return  # No scene files to load, but not an error - just skip
+        #    raise ValueError("scene.scene_files is empty list - remove field or provide scene files")
 
         usd_loader = USDFileLoader(self.sim, self.scene, self.sim_device)
         scene_collection = usd_loader.load_scene_files(scene_config.scene_files, scene_config.asset_root)
@@ -550,7 +551,8 @@ class IsaacSim(BaseSimulator):
             If rigid_objects is an empty list
         """
         if not scene_config.rigid_objects:  # Empty list
-            raise ValueError("scene.rigid_objects is empty list - remove field or provide objects")
+            return
+            #raise ValueError("scene.rigid_objects is empty list - remove field or provide objects")
 
         usd_loader = USDFileLoader(self.sim, self.scene, self.sim_device)
         individual_objects = usd_loader.load_rigid_objects(scene_config.rigid_objects, scene_config.asset_root)

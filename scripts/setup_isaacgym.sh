@@ -50,6 +50,6 @@ if [[ ! -f $SENTINEL_FILE ]]; then
 
   # Install Holosoma
   pip install -U pip
-  pip install -e $ROOT_DIR/src/holosoma[unitree,booster]
+  pip install -e $ROOT_DIR/src/holosoma[unitree]
   touch $SENTINEL_FILE
 fi

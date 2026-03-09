@@ -64,7 +64,7 @@ if [[ ! -f $SENTINEL_FILE ]]; then
 
  # Install Holosoma
   pip install -U pip
-  pip install -e $ROOT_DIR/src/holosoma[unitree,booster]
+  pip install -e $ROOT_DIR/src/holosoma[unitree]
 
   # Force upgrade wandb to override rl-games constraint
   pip install --upgrade 'wandb>=0.21.1'
