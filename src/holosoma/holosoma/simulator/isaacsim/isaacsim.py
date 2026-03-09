@@ -575,8 +575,7 @@ class IsaacSim(BaseSimulator):
             If rigid_objects is an empty list
         """
         if not scene_config.rigid_objects:  # Empty list
-            return
-            #raise ValueError("scene.rigid_objects is empty list - remove field or provide objects")
+            raise ValueError("scene.rigid_objects is empty list - remove field or provide objects")
 
         usd_loader = USDFileLoader(self.sim, self.scene, self.sim_device)
         individual_objects = usd_loader.load_rigid_objects(scene_config.rigid_objects, scene_config.asset_root)
