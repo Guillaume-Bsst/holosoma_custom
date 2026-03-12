@@ -310,6 +310,20 @@ class MotionCommand(CommandTermBase):
             self.motion_cfg.body_names_to_track, robot_body_names, self.device
         )
 
+        # Simulator body IDs for _rigid_body_pos/_rot/_vel/_ang_vel access.
+        # These differ from tracked_body_indexes in MuJoCo where _rigid_body_pos is
+        # MuJoCo-indexed (worldbody at 0), whereas tracked_body_indexes is 0-based
+        # from body_names (worldbody excluded). find_rigid_body_indice() returns the
+        # correct index for each simulator (MuJoCo body ID or Isaac local index).
+        self._robot_ref_body_id: int = self._env.simulator.find_rigid_body_indice(  # type: ignore[attr-defined]
+            self.motion_cfg.body_name_ref[0]
+        )
+        self._robot_tracked_body_ids: torch.Tensor = torch.tensor(
+            [self._env.simulator.find_rigid_body_indice(name) for name in self.motion_cfg.body_names_to_track],  # type: ignore[attr-defined]
+            dtype=torch.long,
+            device=self.device,
+        )
+
         # 3. get the name of the object, or indices of the object
         if self.motion.has_object:
             # cache the object_index_in_simulator
@@ -623,19 +637,19 @@ class MotionCommand(CommandTermBase):
 
     @property
     def robot_body_pos_w(self) -> torch.Tensor:
-        return self._env.simulator._rigid_body_pos[:, self.tracked_body_indexes, :]
+        return self._env.simulator._rigid_body_pos[:, self._robot_tracked_body_ids, :]
 
     @property
     def robot_body_quat_w(self) -> torch.Tensor:
-        return self._env.simulator._rigid_body_rot[:, self.tracked_body_indexes, :]  # xyzw
+        return self._env.simulator._rigid_body_rot[:, self._robot_tracked_body_ids, :]  # xyzw
 
     @property
     def robot_body_lin_vel_w(self) -> torch.Tensor:
-        return self._env.simulator._rigid_body_vel[:, self.tracked_body_indexes, :]
+        return self._env.simulator._rigid_body_vel[:, self._robot_tracked_body_ids, :]
 
     @property
     def robot_body_ang_vel_w(self) -> torch.Tensor:
-        return self._env.simulator._rigid_body_ang_vel[:, self.tracked_body_indexes, :]
+        return self._env.simulator._rigid_body_ang_vel[:, self._robot_tracked_body_ids, :]
 
     @property
     def robot_root_pos_w(self) -> torch.Tensor:
@@ -655,19 +669,19 @@ class MotionCommand(CommandTermBase):
 
     @property
     def robot_ref_pos_w(self) -> torch.Tensor:
-        return self._env.simulator._rigid_body_pos[:, self.ref_body_index, :]
+        return self._env.simulator._rigid_body_pos[:, self._robot_ref_body_id, :]
 
     @property
     def robot_ref_quat_w(self) -> torch.Tensor:
-        return self._env.simulator._rigid_body_rot[:, self.ref_body_index, :]  # xyzw
+        return self._env.simulator._rigid_body_rot[:, self._robot_ref_body_id, :]  # xyzw
 
     @property
     def robot_ref_lin_vel_w(self) -> torch.Tensor:
-        return self._env.simulator._rigid_body_vel[:, self.ref_body_index, :]
+        return self._env.simulator._rigid_body_vel[:, self._robot_ref_body_id, :]
 
     @property
     def robot_ref_ang_vel_w(self) -> torch.Tensor:
-        return self._env.simulator._rigid_body_ang_vel[:, self.ref_body_index, :]
+        return self._env.simulator._rigid_body_ang_vel[:, self._robot_ref_body_id, :]
 
     #########################################################################################
     ## Object from motion data
