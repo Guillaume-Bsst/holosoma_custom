@@ -11,7 +11,26 @@ init_pose_config = NoiseToInitialPoseConfig(
     root_rot=[0.1, 0.1, 0.2],
     root_lin_vel=[0.1, 0.1, 0.05],
     root_ang_vel=[0.1, 0.1, 0.1],
-    object_pos=[0.05, 0.05, 0.0],
+    object_pos=[0.05, 0.05, 0.05],
+    # -- Robust noise fields --
+    # Wrist links are the closest controlled points to the grasped object.
+    hand_body_names=["left_wrist_yaw_link", "right_wrist_yaw_link"],
+    # Matches all arm DOFs (shoulders, elbows, wrists) on both sides.
+    arm_joint_pattern=r"^(left|right)_(shoulder_pitch|shoulder_roll|shoulder_yaw|elbow|wrist_roll|wrist_pitch|wrist_yaw)_joint$",
+    grasp_mask_min_dist=0.10,
+    grasp_mask_max_dist=0.40,
+    # Capsule geometry for object-placement rejection sampling.
+    # Order: [torso spine, upper legs x2, lower legs x2]
+    torso_capsule_body_pairs=[
+        ["pelvis", "torso_link"],          # spine / waist volume
+        ["pelvis", "left_knee_link"],      # left upper leg
+        ["pelvis", "right_knee_link"],     # right upper leg
+        ["left_knee_link", "left_ankle_roll_link"],   # left lower leg
+        ["right_knee_link", "right_ankle_roll_link"],  # right lower leg
+    ],
+    torso_capsule_radii=[0.20, 0.12, 0.12, 0.08, 0.08],
+    object_noise_num_proposals=5,
+    object_collision_radius=0.05,
 )
 
 motion_config = MotionConfig(
