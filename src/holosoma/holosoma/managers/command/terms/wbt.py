@@ -65,7 +65,10 @@ class MotionLoader:
 
             # The first 7 joints_pos are [xyz, wxyz] of the pelvis, omit them from the joint_pos
             # The first 6 joints_vel are [vel_xyz, vel_wxyz] of the pelvis, omit them from the joint_vel
-            # We'll use the pelvis position and quaternion from body_pos_w[:, 0] and body_quat_w[:, 0] directly.
+            # We use joint_pos[:, :3] (free joint xyz) for root position at reset: body_pos_w stores the
+            # pelvis COM position (xpos), which is offset from the free joint origin by body_ipos (-7.6cm z).
+            # Using the COM as the free joint position would place the robot 7.6cm too low at reset.
+            self._root_free_joint_pos = torch.tensor(data["joint_pos"][:, :3], dtype=torch.float32, device=device)
             self._joint_pos = torch.tensor(data["joint_pos"][:, 7:], dtype=torch.float32, device=device)
             self._joint_vel = torch.tensor(data["joint_vel"][:, 6:], dtype=torch.float32, device=device)
             assert len(joint_names) == self._joint_pos.shape[1], "Joint names in motion data does not match"
@@ -610,7 +613,7 @@ class MotionCommand(CommandTermBase):
 
     @property
     def root_pos_w(self) -> torch.Tensor:
-        return self.motion.body_pos_w[self.time_steps, 0] + self._env.simulator.scene.env_origins
+        return self.motion._root_free_joint_pos[self.time_steps] + self._env.simulator.scene.env_origins
 
     @property
     def root_quat_w(self) -> torch.Tensor:
