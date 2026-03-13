@@ -476,8 +476,13 @@ class MotionCommand(CommandTermBase):
             * self.init_pose_cfg.overall_noise_scale
         )  # (3,)
 
-        # 2.2 Smooth grasp mask: 0 = hands near object (suppress noise), 1 = hands far (full noise).
+        # 2.2 Smooth proximity masks (both in [0, 1]; 0 = suppress noise, 1 = full noise).
+        # grasp_mask    — hand-to-object distance: suppresses arm DOF noise when grasping.
+        # body_prox_mask — min distance from ANY robot body to object: suppresses ALL DOF noise
+        #                  when any body part (e.g. shins/knees) is near the object, preventing
+        #                  leg joints from swinging into the box at reset (e.g. floor-pickup pose).
         grasp_mask = self._compute_grasp_mask(env_ids)  # (num_envs,) in [0, 1]
+        body_prox_mask = self._compute_body_proximity_mask(env_ids)  # (num_envs,) in [0, 1]
 
         # 2.3 Root state noise (always applied — root state does not affect grasp geometry directly)
         rand_sample_rpy = (torch.rand((len(env_ids), 3), device=self.device) - 0.5) * 2 * root_rot_noise_rpy
@@ -495,8 +500,13 @@ class MotionCommand(CommandTermBase):
             torch.rand(root_ang_vel.shape, device=self.device) - 0.5
         ) * 2 * root_ang_vel_noise_rpy.unsqueeze(0)  # (num_envs, 3)
 
-        # 2.4 DOF noise with arm masking: arm joints are suppressed when the robot is grasping.
+        # 2.4 DOF noise with two-level masking:
+        #   • body_prox_mask applied to ALL DOFs — prevents any joint from moving body parts
+        #     into the object when the robot is in close proximity (e.g. floor-pickup pose).
+        #   • grasp_mask applied additionally to arm DOFs — finer suppression specifically
+        #     for arm/wrist joints when the hands are grasping the object.
         dof_noise = (torch.rand(dof_pos.shape, device=self.device) - 0.5) * 2 * dof_pos_noise
+        dof_noise = dof_noise * body_prox_mask.unsqueeze(1)
         if self._arm_dof_indices is not None and self._arm_dof_indices.numel() > 0:
             dof_noise[:, self._arm_dof_indices] = (
                 dof_noise[:, self._arm_dof_indices] * grasp_mask.unsqueeze(1)
@@ -882,6 +892,32 @@ class MotionCommand(CommandTermBase):
         obj_pos = self.motion.object_pos_w[ts]  # (N, 3)
 
         min_dist = torch.norm(hand_pos - obj_pos.unsqueeze(1), dim=-1).min(dim=1).values  # (N,)
+        d_min = self.init_pose_cfg.grasp_mask_min_dist
+        d_max = self.init_pose_cfg.grasp_mask_max_dist
+        return torch.clamp((min_dist - d_min) / (d_max - d_min + 1e-6), 0.0, 1.0)
+
+    def _compute_body_proximity_mask(self, env_ids: torch.Tensor) -> torch.Tensor:
+        """Smooth proximity mask based on the closest robot body to the object.
+
+        Returns 0 when ANY robot body is within ``grasp_mask_min_dist`` of the object
+        (suppress all DOF noise), and 1 when all bodies are beyond ``grasp_mask_max_dist``
+        (full noise).  Linearly interpolated between.
+
+        This is broader than ``_compute_grasp_mask``: it catches cases where non-hand body
+        parts (e.g. shins/knees in a floor-pickup pose) are near the object, preventing leg
+        joints from swinging into the box at reset.
+
+        Returns all-ones when no object is present.
+        """
+        if not self.motion.has_object:
+            return torch.ones(len(env_ids), device=self.device)
+
+        ts = self.time_steps[env_ids]
+        # shape: (N, num_robot_bodies, 3) — robot bodies only, no env_origins, no largebox.
+        all_body_pos = self.motion.body_pos_w[ts]
+        obj_pos = self.motion.object_pos_w[ts]  # (N, 3)
+
+        min_dist = torch.norm(all_body_pos - obj_pos.unsqueeze(1), dim=-1).min(dim=1).values  # (N,)
         d_min = self.init_pose_cfg.grasp_mask_min_dist
         d_max = self.init_pose_cfg.grasp_mask_max_dist
         return torch.clamp((min_dist - d_min) / (d_max - d_min + 1e-6), 0.0, 1.0)
