@@ -12,25 +12,22 @@
 #SBATCH -A willow
 
 BASE_DIR="/home/gbesset/WILLOW/holosoma"
-SCRATCH_DIR="${BASE_DIR}/scratch_space"
-TMP_DIR="${BASE_DIR}/tmp_space"
 
 cd ${BASE_DIR}
 
 mkdir -p slurm_logs
+mkdir -p ${BASE_DIR}/logs
+mkdir -p ${BASE_DIR}/wandb
 
-mkdir -p ${SCRATCH_DIR}/holosoma_logs
-mkdir -p ${SCRATCH_DIR}/wandb_cache
-
-export APPTAINER_CACHEDIR="${SCRATCH_DIR}/.apptainer_cache"
-export APPTAINER_TMPDIR="${TMP_DIR}/.apptainer_tmp"
+export APPTAINER_CACHEDIR="${BASE_DIR}/.apptainer_cache"
+export APPTAINER_TMPDIR="${BASE_DIR}/.apptainer_tmp"
 mkdir -p ${APPTAINER_CACHEDIR} ${APPTAINER_TMPDIR}
 
 apptainer exec --nv --writable-tmpfs \
     --bind /run \
     --bind /dev/shm \
-    --bind ${SCRATCH_DIR}/holosoma_logs:/workspace/holosoma/logs \
-    --bind ${SCRATCH_DIR}/wandb_cache:/workspace/holosoma/wandb \
+    --bind ${BASE_DIR}/logs:/workspace/holosoma/logs \
+    --bind ${BASE_DIR}/wandb:/workspace/holosoma/wandb \
     --bind ${BASE_DIR}/src:/workspace/holosoma/src \
     ${BASE_DIR}/apptainer/holosoma.sif bash -c "
     source /root/.holosoma_deps/miniconda3/etc/profile.d/conda.sh && \

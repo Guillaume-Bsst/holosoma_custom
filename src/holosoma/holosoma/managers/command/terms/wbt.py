@@ -479,17 +479,29 @@ class MotionCommand(CommandTermBase):
             obj_ori = self.object_quat_w[env_ids]
             obj_lin_vel = self.object_lin_vel_w[env_ids]
 
-            # 4.2 add noise to the object states
-            obj_pos_noise = torch.tensor(
-                [self.init_pose_cfg.object_pos],
-                device=self.device,
-            )
-            obj_pos_noise = obj_pos_noise * self.init_pose_cfg.overall_noise_scale  # (3,)
-            target_obj_pos = obj_pos + (torch.rand(obj_pos.shape, device=self.device) - 0.5) * 2 * obj_pos_noise
+            # 4.1 Place the object relative to the (noisy) robot root so that the reference
+            # relative position is always maintained, regardless of robot noise.
+            # This prevents the object from spawning inside the robot due to rotation noise.
+            #   rel_pos = reference object position relative to reference robot root (world frame)
+            #   After applying robot noise (translation + rotation), the object is placed at:
+            #     target_obj_pos = target_root_pos + R_delta * rel_pos
+            #   where R_delta is the rotation noise delta applied to the robot.
+            rel_pos = obj_pos - root_pos  # (num_envs, 3)
+            rotated_rel_pos = quat_apply(orientations_delta, rel_pos, w_last=True)  # (num_envs, 3)
+            target_obj_pos = target_root_pos + rotated_rel_pos
+
+            # 4.2 Add small noise to the object position in the robot's local frame,
+            # so the policy learns robustness to variations in the relative robot/object configuration.
+            obj_pos_noise = (
+                torch.tensor(self.init_pose_cfg.object_pos, device=self.device)
+                * self.init_pose_cfg.overall_noise_scale
+            )  # (3,)
+            local_obj_noise = (torch.rand(obj_pos.shape, device=self.device) - 0.5) * 2 * obj_pos_noise
+            target_obj_pos = target_obj_pos + quat_apply(target_root_rot, local_obj_noise, w_last=True)
 
             object_states = torch.cat(
                 [target_obj_pos, obj_ori, obj_lin_vel, torch.zeros_like(obj_lin_vel)], dim=-1
-            )  # (num_envs, 7)
+            )  # (num_envs, 13)
             # 4.3 set the object states in simulator
             self._env.simulator.set_actor_states([self.object_name], env_ids, object_states)
 
