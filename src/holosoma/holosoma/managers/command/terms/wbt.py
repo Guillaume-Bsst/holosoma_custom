@@ -268,6 +268,20 @@ def get_filtered_body_names(body_list: List[str], pattern: str) -> List[str]:
     return [body_name for body_name in body_list if re.match(pattern, body_name)]
 
 
+def _point_to_segment_distance(
+    points: torch.Tensor,  # (..., 3)
+    seg_start: torch.Tensor,  # (..., 3)
+    seg_end: torch.Tensor,  # (..., 3)
+) -> torch.Tensor:
+    """Vectorized minimum distance from points to line segments. Returns (...,)."""
+    seg_vec = seg_end - seg_start  # (..., 3)
+    pt_vec = points - seg_start  # (..., 3)
+    seg_len_sq = (seg_vec * seg_vec).sum(dim=-1, keepdim=True).clamp(min=1e-8)
+    t = ((pt_vec * seg_vec).sum(dim=-1, keepdim=True) / seg_len_sq).clamp(0.0, 1.0)
+    closest = seg_start + t * seg_vec
+    return torch.norm(points - closest, dim=-1)
+
+
 class MotionCommand(CommandTermBase):
     def __init__(self, cfg: Any, env: WholeBodyTrackingManager):
         super().__init__(cfg, env)
@@ -350,9 +364,52 @@ class MotionCommand(CommandTermBase):
         # 5. metrics
         self.metrics: dict[str, torch.Tensor] = {}
 
+        # 6. Noise precomputation: indices for arm DOFs, hand bodies, and torso capsules.
+        # Arm DOF indices — joints whose noise is suppressed when the robot grasps the object.
+        if self.init_pose_cfg.arm_joint_pattern:
+            arm_idx = [
+                i for i, name in enumerate(robot_joint_names)
+                if re.match(self.init_pose_cfg.arm_joint_pattern, name)
+            ]
+            self._arm_dof_indices: torch.Tensor | None = (
+                torch.tensor(arm_idx, dtype=torch.long, device=self.device) if arm_idx else None
+            )
+        else:
+            self._arm_dof_indices = None
+
+        # Hand body indices — into the motion.body_pos_w second dimension (robot-body order).
+        if self.init_pose_cfg.hand_body_names and self.motion.has_object:
+            hand_idx = [
+                i for i, name in enumerate(robot_body_names_alias)
+                if name in self.init_pose_cfg.hand_body_names
+            ]
+            self._hand_body_robot_indices: torch.Tensor | None = (
+                torch.tensor(hand_idx, dtype=torch.long, device=self.device) if hand_idx else None
+            )
+        else:
+            self._hand_body_robot_indices = None
+
+        # Torso capsule body-pair indices for geometric collision rejection.
+        self._torso_capsule_pairs: list[tuple[int, int]] = []
+        self._torso_capsule_radii_list: list[float] = []
+        for cap_i, pair in enumerate(self.init_pose_cfg.torso_capsule_body_pairs):
+            if len(pair) != 2:
+                continue
+            name_a, name_b = pair[0], pair[1]
+            if name_a in robot_body_names_alias and name_b in robot_body_names_alias:
+                self._torso_capsule_pairs.append(
+                    (robot_body_names_alias.index(name_a), robot_body_names_alias.index(name_b))
+                )
+                cap_r = (
+                    self.init_pose_cfg.torso_capsule_radii[cap_i]
+                    if cap_i < len(self.init_pose_cfg.torso_capsule_radii)
+                    else 0.15
+                )
+                self._torso_capsule_radii_list.append(cap_r)
+
         self.init_buffers()
 
-        # 6. visualization markers for isaacsim
+        # 7. visualization markers for isaacsim
         if self._env.viewer and self._env.simulator.get_simulator_type() == SimulatorType.ISAACSIM:
             self._setup_visualization_markers_for_isaacsim()
 
@@ -400,69 +457,54 @@ class MotionCommand(CommandTermBase):
         dof_vel = self.joint_vel[env_ids].clone()
 
         # 2. Adding noise
-        # 2.1 prepare the noise scale
+        # 2.1 Prepare noise scales
         dof_pos_noise = self.init_pose_cfg.dof_pos * self.init_pose_cfg.overall_noise_scale  # float
         root_pos_noise = (
-            torch.tensor(
-                self.init_pose_cfg.root_pos,
-                device=self.device,
-            )
+            torch.tensor(self.init_pose_cfg.root_pos, device=self.device)
             * self.init_pose_cfg.overall_noise_scale
         )  # (3,)
         root_rot_noise_rpy = (
-            torch.tensor(
-                self.init_pose_cfg.root_rot,
-                device=self.device,
-            )
+            torch.tensor(self.init_pose_cfg.root_rot, device=self.device)
             * self.init_pose_cfg.overall_noise_scale
         )  # (3,)
         root_vel_noise = (
-            torch.tensor(
-                self.init_pose_cfg.root_lin_vel,
-                device=self.device,
-            )
+            torch.tensor(self.init_pose_cfg.root_lin_vel, device=self.device)
             * self.init_pose_cfg.overall_noise_scale
         )  # (3,)
         root_ang_vel_noise_rpy = (
-            torch.tensor(
-                self.init_pose_cfg.root_ang_vel,
-                device=self.device,
-            )
+            torch.tensor(self.init_pose_cfg.root_ang_vel, device=self.device)
             * self.init_pose_cfg.overall_noise_scale
         )  # (3,)
 
-        # 2.2 Adding noise to dof_pos, root_pos, root_vel, root_ang_vel, root_rot
-        # 1.2.1 dof_pos
-        target_dof_pos = (
-            dof_pos + (torch.rand(dof_pos.shape, device=self.device) - 0.5) * 2 * dof_pos_noise
-        )  # (num_envs, num_dofs)
-        soft_joint_pos_limits = self._env.simulator.dof_pos_limits  # type: ignore[attr-defined]  # (num_dofs, 2)
-        target_dof_pos = torch.clip(target_dof_pos, soft_joint_pos_limits[:, 0], soft_joint_pos_limits[:, 1])
+        # 2.2 Smooth grasp mask: 0 = hands near object (suppress noise), 1 = hands far (full noise).
+        grasp_mask = self._compute_grasp_mask(env_ids)  # (num_envs,) in [0, 1]
 
-        # 1.2.2 dof_vel no noise
-        target_dof_vel = dof_vel
-
-        # 1.2.3 root_pos
-        target_root_pos = root_pos + (
-            torch.rand(root_pos.shape, device=self.device) - 0.5
-        ) * 2 * root_pos_noise.unsqueeze(0)  # (num_envs, 3)
-
-        # 1.2.4 root_rot
+        # 2.3 Root state noise (always applied — root state does not affect grasp geometry directly)
         rand_sample_rpy = (torch.rand((len(env_ids), 3), device=self.device) - 0.5) * 2 * root_rot_noise_rpy
         orientations_delta = quat_from_euler_xyz(
             rand_sample_rpy[:, 0], rand_sample_rpy[:, 1], rand_sample_rpy[:, 2]
         )  # (num_envs, 4), xyzw
         target_root_rot = quat_mul(orientations_delta, root_rot, w_last=True)  # (num_envs, 4), xyzw
-
-        # 1.2.5 root_lin_vel
+        target_root_pos = root_pos + (
+            torch.rand(root_pos.shape, device=self.device) - 0.5
+        ) * 2 * root_pos_noise.unsqueeze(0)  # (num_envs, 3)
         target_root_lin_vel = root_lin_vel + (
             torch.rand(root_lin_vel.shape, device=self.device) - 0.5
         ) * 2 * root_vel_noise.unsqueeze(0)  # (num_envs, 3)
-
-        # 1.2.6 root_ang_vel
         target_root_ang_vel = root_ang_vel + (
             torch.rand(root_ang_vel.shape, device=self.device) - 0.5
         ) * 2 * root_ang_vel_noise_rpy.unsqueeze(0)  # (num_envs, 3)
+
+        # 2.4 DOF noise with arm masking: arm joints are suppressed when the robot is grasping.
+        dof_noise = (torch.rand(dof_pos.shape, device=self.device) - 0.5) * 2 * dof_pos_noise
+        if self._arm_dof_indices is not None and self._arm_dof_indices.numel() > 0:
+            dof_noise[:, self._arm_dof_indices] = (
+                dof_noise[:, self._arm_dof_indices] * grasp_mask.unsqueeze(1)
+            )
+        target_dof_pos = dof_pos + dof_noise  # (num_envs, num_dofs)
+        soft_joint_pos_limits = self._env.simulator.dof_pos_limits  # type: ignore[attr-defined]  # (num_dofs, 2)
+        target_dof_pos = torch.clip(target_dof_pos, soft_joint_pos_limits[:, 0], soft_joint_pos_limits[:, 1])
+        target_dof_vel = dof_vel  # no noise on velocities
 
         # 3. Set the robot states in simulator
         self._env.simulator.dof_pos[env_ids] = target_dof_pos
@@ -479,30 +521,53 @@ class MotionCommand(CommandTermBase):
             obj_ori = self.object_quat_w[env_ids]
             obj_lin_vel = self.object_lin_vel_w[env_ids]
 
-            # 4.1 Place the object relative to the (noisy) robot root so that the reference
-            # relative position is always maintained, regardless of robot noise.
-            # This prevents the object from spawning inside the robot due to rotation noise.
-            #   rel_pos = reference object position relative to reference robot root (world frame)
-            #   After applying robot noise (translation + rotation), the object is placed at:
-            #     target_obj_pos = target_root_pos + R_delta * rel_pos
-            #   where R_delta is the rotation noise delta applied to the robot.
+            # 4.1 Global anchoring: rotate the reference relative position by the root rotation
+            # delta, then shift by the noisy root translation.  This guarantees that the grasp
+            # geometry is exactly preserved after root-level noise, regardless of magnitude.
             rel_pos = obj_pos - root_pos  # (num_envs, 3)
             rotated_rel_pos = quat_apply(orientations_delta, rel_pos, w_last=True)  # (num_envs, 3)
-            target_obj_pos = target_root_pos + rotated_rel_pos
+            anchored_obj_pos = target_root_pos + rotated_rel_pos  # (num_envs, 3)
 
-            # 4.2 Add small noise to the object position in the robot's local frame,
-            # so the policy learns robustness to variations in the relative robot/object configuration.
+            # 4.2 Local object noise with batched rejection sampling.
+            # The noise amplitude is scaled by grasp_mask: zero perturbation when grasping.
             obj_pos_noise = (
                 torch.tensor(self.init_pose_cfg.object_pos, device=self.device)
                 * self.init_pose_cfg.overall_noise_scale
-            )  # (3,)
-            local_obj_noise = (torch.rand(obj_pos.shape, device=self.device) - 0.5) * 2 * obj_pos_noise
-            target_obj_pos = target_obj_pos + quat_apply(target_root_rot, local_obj_noise, w_last=True)
+                * grasp_mask.unsqueeze(1)  # (num_envs, 3)
+            )
+            K = self.init_pose_cfg.object_noise_num_proposals
+            num_reset = len(env_ids)
+            # Generate K proposals in the robot local frame.
+            local_proposals = (
+                (torch.rand((num_reset, K, 3), device=self.device) - 0.5) * 2
+                * obj_pos_noise.unsqueeze(1)  # broadcast: (num_envs, K, 3)
+            )
+            # Rotate proposals into world frame using the noisy root orientation.
+            target_root_rot_exp = target_root_rot.unsqueeze(1).expand(-1, K, -1).reshape(-1, 4)
+            world_proposals = quat_apply(
+                target_root_rot_exp, local_proposals.reshape(-1, 3), w_last=True
+            ).reshape(num_reset, K, 3)
+            candidate_positions = anchored_obj_pos.unsqueeze(1) + world_proposals  # (num_envs, K, 3)
+
+            # 4.3 Geometric collision filter: reject proposals that penetrate torso capsules.
+            capsules = self._get_torso_capsules_world(env_ids, target_root_pos, root_rot, target_root_rot)
+            valid_mask = self._check_object_no_collision(candidate_positions, capsules)  # (num_envs, K) bool
+
+            # 4.4 Select the first valid proposal per environment; fall back to zero local noise
+            # (anchored_obj_pos) if all K proposals collide.
+            has_valid = valid_mask.any(dim=1)  # (num_envs,)
+            first_valid_idx = torch.argmax(valid_mask.float(), dim=1)  # (num_envs,)
+            selected_world_noise = world_proposals[
+                torch.arange(num_reset, device=self.device), first_valid_idx
+            ]  # (num_envs, 3)
+            target_obj_pos = torch.where(
+                has_valid.unsqueeze(1), anchored_obj_pos + selected_world_noise, anchored_obj_pos
+            )
 
             object_states = torch.cat(
                 [target_obj_pos, obj_ori, obj_lin_vel, torch.zeros_like(obj_lin_vel)], dim=-1
             )  # (num_envs, 13)
-            # 4.3 set the object states in simulator
+            # 4.5 set the object states in simulator
             self._env.simulator.set_actor_states([self.object_name], env_ids, object_states)
 
     def step(self) -> None:
@@ -787,6 +852,96 @@ class MotionCommand(CommandTermBase):
     #########################################################################################
     ## Internal helpers
     #########################################################################################
+
+    # ------------------------------------------------------------------ #
+    # Robust noise helpers
+    # ------------------------------------------------------------------ #
+
+    def _compute_grasp_mask(self, env_ids: torch.Tensor) -> torch.Tensor:
+        """Smooth proximity mask in [0, 1].
+
+        Returns 0 when the closest hand is within ``grasp_mask_min_dist`` of the
+        object (suppress arm/object noise), and 1 when it is beyond
+        ``grasp_mask_max_dist`` (full noise).  Linearly interpolated between.
+
+        If hand bodies or object are not configured, returns all-ones (no masking).
+        """
+        if self._hand_body_robot_indices is None or not self.motion.has_object:
+            return torch.ones(len(env_ids), device=self.device)
+
+        ts = self.time_steps[env_ids]
+        # motion.body_pos_w (MotionLoader property) shape: (T, num_robot_bodies, 3), no env_origins.
+        hand_pos = self.motion.body_pos_w[ts][:, self._hand_body_robot_indices]  # (N, H, 3)
+        obj_pos = self.motion.object_pos_w[ts]  # (N, 3)
+
+        min_dist = torch.norm(hand_pos - obj_pos.unsqueeze(1), dim=-1).min(dim=1).values  # (N,)
+        d_min = self.init_pose_cfg.grasp_mask_min_dist
+        d_max = self.init_pose_cfg.grasp_mask_max_dist
+        return torch.clamp((min_dist - d_min) / (d_max - d_min + 1e-6), 0.0, 1.0)
+
+    def _get_torso_capsules_world(
+        self,
+        env_ids: torch.Tensor,
+        target_root_pos: torch.Tensor,  # (N, 3)
+        root_rot_ref: torch.Tensor,  # (N, 4) xyzw — reference root orientation from motion data
+        target_root_rot: torch.Tensor,  # (N, 4) xyzw — noisy root orientation
+    ) -> list[tuple[torch.Tensor, torch.Tensor, float]]:
+        """Build torso capsule endpoints in world frame adapted to the noisy root pose.
+
+        Each capsule is specified as a pair of body names in root-local frame.  We:
+          1. Read the reference body positions from motion data (no env_origins, same frame as root).
+          2. Express them relative to the reference root position and orientation.
+          3. Re-apply the *noisy* root pose so the capsules match the placed robot.
+
+        Returns a list of (start_world, end_world, radius) tuples — empty when no capsules are
+        configured.
+        """
+        if not self._torso_capsule_pairs:
+            return []
+
+        ts = self.time_steps[env_ids]
+        # All body positions in the motion frame (no env_origins) — shape (N, num_robot_bodies, 3).
+        body_pos_motion = self.motion.body_pos_w[ts]
+        # Reference root position in motion frame (no env_origins) — shape (N, 3).
+        root_pos_motion = self.motion._root_free_joint_pos[ts]
+        root_rot_ref_inv = quat_inverse(root_rot_ref, w_last=True)  # (N, 4)
+
+        capsules: list[tuple[torch.Tensor, torch.Tensor, float]] = []
+        for (idx_a, idx_b), radius in zip(self._torso_capsule_pairs, self._torso_capsule_radii_list):
+            # Body positions relative to the reference root (motion frame).
+            rel_a = body_pos_motion[:, idx_a] - root_pos_motion  # (N, 3)
+            rel_b = body_pos_motion[:, idx_b] - root_pos_motion  # (N, 3)
+            # Rotate into root-local frame using the reference root orientation.
+            local_a = quat_apply(root_rot_ref_inv, rel_a, w_last=True)  # (N, 3)
+            local_b = quat_apply(root_rot_ref_inv, rel_b, w_last=True)  # (N, 3)
+            # Transform to the noisy world frame.
+            start_w = target_root_pos + quat_apply(target_root_rot, local_a, w_last=True)  # (N, 3)
+            end_w = target_root_pos + quat_apply(target_root_rot, local_b, w_last=True)  # (N, 3)
+            capsules.append((start_w, end_w, radius))
+
+        return capsules
+
+    def _check_object_no_collision(
+        self,
+        candidate_positions: torch.Tensor,  # (N, K, 3)
+        capsules: list[tuple[torch.Tensor, torch.Tensor, float]],
+    ) -> torch.Tensor:
+        """Return (N, K) bool: True = proposal is free of capsule collisions.
+
+        If no capsules are defined, all proposals are considered valid.
+        """
+        N, K, _ = candidate_positions.shape
+        valid = torch.ones(N, K, dtype=torch.bool, device=self.device)
+        obj_r = self.init_pose_cfg.object_collision_radius
+        for start_w, end_w, cap_r in capsules:
+            seg_start = start_w.unsqueeze(1).expand(-1, K, -1)  # (N, K, 3)
+            seg_end = end_w.unsqueeze(1).expand(-1, K, -1)  # (N, K, 3)
+            dist = _point_to_segment_distance(candidate_positions, seg_start, seg_end)  # (N, K)
+            valid = valid & (dist > (cap_r + obj_r))
+        return valid
+
+    # ------------------------------------------------------------------ #
+
     def _maybe_add_default_pose_transition(self, *, prepend: bool) -> None:
         """Shared path for optionally inserting default-pose interpolation before/after the clip."""
         enabled = self.motion_cfg.enable_default_pose_prepend if prepend else self.motion_cfg.enable_default_pose_append

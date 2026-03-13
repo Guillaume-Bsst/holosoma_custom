@@ -63,6 +63,37 @@ class NoiseToInitialPoseConfig:
     object_pos: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
     """noise scale for object position x, y, z."""
 
+    # ------------------------------------------------------------------ #
+    # Robust noise fields (smooth masking + rejection sampling)
+    # ------------------------------------------------------------------ #
+    hand_body_names: list[str] = field(default_factory=list)
+    """Body names of the robot's hands used to compute the grasp proximity mask."""
+
+    arm_joint_pattern: str = ""
+    """Regex pattern matching arm DOF names (shoulders, elbows, wrists).
+    Matched joints have their noise scaled by the grasp proximity mask so that
+    the configuration is preserved when the robot is holding the object."""
+
+    grasp_mask_min_dist: float = 0.10
+    """Hand-to-object distance (m) below which arm noise is fully suppressed (mask=0)."""
+
+    grasp_mask_max_dist: float = 0.40
+    """Hand-to-object distance (m) above which arm noise is fully applied (mask=1)."""
+
+    object_noise_num_proposals: int = 5
+    """Number of candidate local-noise proposals K tried per environment during
+    rejection sampling on the object position."""
+
+    object_collision_radius: float = 0.05
+    """Clearance radius (m) added around the object center when testing capsule collisions."""
+
+    torso_capsule_body_pairs: list[list[str]] = field(default_factory=list)
+    """Pairs of body names [[bodyA, bodyB], ...] that define capsule segments
+    approximating the robot's torso/arm geometry for collision rejection."""
+
+    torso_capsule_radii: list[float] = field(default_factory=list)
+    """Radius (m) for each capsule in torso_capsule_body_pairs (same order)."""
+
 
 @dataclass(frozen=True)
 class MotionConfig:
