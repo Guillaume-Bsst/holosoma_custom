@@ -52,7 +52,6 @@ apptainer exec --nv \
     cd /workspace/holosoma && \
     xvfb-run -a python src/holosoma/holosoma/train_agent.py \
         exp:g1-29dof-wbt-isaacsim-w-object \
-        simulator:isaacsim-w-object \
         logger:wandb \
         --logger.video.enabled=False \
         --training.num-envs=8192 \

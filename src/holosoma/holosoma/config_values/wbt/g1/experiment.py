@@ -137,6 +137,16 @@ g1_29dof_wbt_fast_sac = ExperimentConfig(
 g1_29dof_wbt_mjwarp = replace(
     g1_29dof_wbt_isaacsim,
     randomization=randomization.g1_29dof_wbt_randomization_mjwarp,
+    simulator=replace(
+        simulator.mjwarp,
+        config=replace(
+            simulator.mjwarp.config,
+            sim=replace(
+                simulator.mjwarp.config.sim,
+                max_episode_length_s=10.0,
+            ),
+        ),
+    ),
 )
 
 g1_29dof_wbt_isaacsim_w_object = replace(
@@ -166,6 +176,13 @@ g1_29dof_wbt_isaacsim_w_object = replace(
 g1_29dof_wbt_mjwarp_w_object = replace(
     g1_29dof_wbt_isaacsim_w_object,
     randomization=randomization.g1_29dof_wbt_randomization_mjwarp_w_object,
+    simulator=replace(
+        simulator.mjwarp_w_object,
+        config=replace(
+            simulator.mjwarp_w_object.config,
+            scene=replace(simulator.mjwarp_w_object.config.scene, env_spacing=0.0),
+        ),
+    ),
 )
 
 g1_29dof_wbt_fast_sac_w_object = replace(
@@ -205,19 +222,22 @@ python src/holosoma/holosoma/train_agent.py \
 
 Example 2: Robot only (MJWarp):
 python src/holosoma/holosoma/train_agent.py \
-    exp:g1-29dof-wbt-mjwarp \
-    simulator:mjwarp
+    exp:g1-29dof-wbt-mjwarp
 
 Example 3: Robot+Object (IsaacSim):
 python src/holosoma/holosoma/train_agent.py \
-  exp:g1-29dof-wbt-isaacsim-w-object
+    exp:g1-29dof-wbt-isaacsim-w-object
 
-Example 4: Robot+Terrain (IsaacSim):
+Example 4: Robot+Object (MJWarp):
 python src/holosoma/holosoma/train_agent.py \
-  exp:g1-29dof-wbt-isaacsim \
-  terrain:terrain-load-obj \
-  --terrain.terrain-term.obj-file-path="holosoma/data/motions/g1_29dof/whole_body_tracking/terrain_slope.obj" \
-  --command.setup_terms.motion_command.params.motion_config.motion_file\
+    exp:g1-29dof-wbt-mjwarp-w-object
+
+Example 5: Robot+Terrain (IsaacSim):
+python src/holosoma/holosoma/train_agent.py \
+    exp:g1-29dof-wbt-isaacsim \
+    terrain:terrain-load-obj \
+    --terrain.terrain-term.obj-file-path="holosoma/data/motions/g1_29dof/whole_body_tracking/terrain_slope.obj" \
+    --command.setup_terms.motion_command.params.motion_config.motion_file\
 ="holosoma/data/motions/g1_29dof/whole_body_tracking/motion_crawl_slope.npz" \
-  --simulator.config.scene.env_spacing=0.0
+    --simulator.config.scene.env_spacing=0.0
 """

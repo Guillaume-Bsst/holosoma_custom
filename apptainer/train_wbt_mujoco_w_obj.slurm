@@ -37,7 +37,6 @@ apptainer exec --nv --writable-tmpfs \
     cd /workspace/holosoma && \
     python src/holosoma/holosoma/train_agent.py \
         exp:g1-29dof-wbt-mjwarp-w-object \
-        simulator:mjwarp-w-object \
         logger:wandb \
         terrain:terrain-locomotion-plane \
         --logger.video.enabled=False \

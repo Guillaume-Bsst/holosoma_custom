@@ -187,8 +187,8 @@ _mjwarp_setup_terms = {
     "randomize_mass_startup": RandomizationTermCfg(
         func="holosoma.managers.randomization.terms.locomotion:randomize_mass_startup",
         params={
-            "link_mass_range": [0.9, 1.2],
-            "added_mass_range": [-1.0, 3.0],
+            "link_mass_range": [0.95, 1.1],
+            "added_mass_range": [-0.5, 1.0],
             "enable_link_mass": True,
             "enable_base_mass": True,
             "enabled": True,

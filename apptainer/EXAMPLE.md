@@ -188,7 +188,6 @@ apptainer exec --nv \
     cd /workspace/holosoma && \
     xvfb-run -a python src/holosoma/holosoma/train_agent.py \
         exp:g1-29dof-wbt-isaacsim-w-object \
-        simulator:isaacsim-w-object \
         logger:wandb \
         --logger.video.enabled=False \
         --training.num-envs=512 \
@@ -214,7 +213,6 @@ apptainer exec --nv --writable-tmpfs \
     cd /workspace/holosoma && \
     xvfb-run -a python src/holosoma/holosoma/train_agent.py \
         exp:g1-29dof-wbt-mjwarp \
-        simulator:mjwarp \
         logger:wandb \
         --logger.video.enabled=False \
         --training.num-envs=512 \
@@ -236,7 +234,6 @@ apptainer exec --nv --writable-tmpfs \
     cd /workspace/holosoma && \
     xvfb-run -a torchrun --nproc_per_node=2 src/holosoma/holosoma/train_agent.py \
         exp:g1-29dof-wbt-mjwarp \
-        simulator:mjwarp \
         logger:wandb \
         --logger.video.enabled=False \
         --training.multigpu=True \
@@ -260,7 +257,6 @@ apptainer exec --nv --writable-tmpfs \
     cd /workspace/holosoma && \
     xvfb-run -a python src/holosoma/holosoma/train_agent.py \
         exp:g1-29dof-wbt-mjwarp-w-object \
-        simulator:mjwarp-w-object \
         logger:wandb \
         terrain:terrain-locomotion-plane \
         --logger.video.enabled=False \
