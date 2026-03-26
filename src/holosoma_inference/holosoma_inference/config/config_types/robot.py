@@ -149,7 +149,7 @@ class RobotConfig:
     sdk_type: str = "unitree"
     """SDK type for robot communication.
 
-    Built-in types: 'unitree', 'booster'.
+    Built-in types: 'unitree', 'booster', 'ros2'.
     Extensions can register additional SDK types.
     """
 

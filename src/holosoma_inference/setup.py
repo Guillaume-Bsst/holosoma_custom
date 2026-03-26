@@ -62,6 +62,7 @@ setup(
         "holosoma.sdk": [
             "unitree = holosoma_inference.sdk.unitree.unitree_interface:UnitreeInterface",
             "booster = holosoma_inference.sdk.booster.booster_interface:BoosterInterface",
+            "ros2 = holosoma_inference.sdk.ros2.ros2_interface:ROS2Interface",
         ],
     },
     keywords="humanoid robotics inference policy onnx",

@@ -1,13 +1,14 @@
+# Holosoma Command Examples
 
-# Holosoma command example
+All commands are run from the `holosoma/` directory unless otherwise specified.
 
-## Retargeting
+---
 
-From `holosoma/` directory:
+## 1. Retargeting
+
+### Robot-only (OMOMO)
 
 ```bash
-
-# Robot-only (OMOMO)
 apptainer exec --nv --writable-tmpfs --bind /run apptainer/holosoma.sif bash -c "
     mkdir -p /home/gbesset && \
     ln -sf /root/.holosoma_deps /home/gbesset/.holosoma_deps && \
@@ -23,8 +24,11 @@ apptainer exec --nv --writable-tmpfs --bind /run apptainer/holosoma.sif bash -c 
         --task-name sub3_largebox_003 \
         --data_format smplh
 "
+```
 
-# Object interaction (OMOMO)
+### Object interaction (OMOMO)
+
+```bash
 apptainer exec --nv --writable-tmpfs --bind /run apptainer/holosoma.sif bash -c "
     mkdir -p /home/gbesset && \
     ln -sf /root/.holosoma_deps /home/gbesset/.holosoma_deps && \
@@ -40,8 +44,11 @@ apptainer exec --nv --writable-tmpfs --bind /run apptainer/holosoma.sif bash -c 
         --task-name sub3_largebox_003 \
         --data_format smplh
 "
+```
 
-# Climbing
+### Climbing
+
+```bash
 apptainer exec --nv --writable-tmpfs --bind /run apptainer/holosoma.sif bash -c "
     mkdir -p /home/gbesset && \
     ln -sf /root/.holosoma_deps /home/gbesset/.holosoma_deps && \
@@ -56,18 +63,17 @@ apptainer exec --nv --writable-tmpfs --bind /run apptainer/holosoma.sif bash -c 
         --task-type climbing \
         --task-name mocap_climb_seq_0 \
         --data_format mocap \
-        --robot-config.robot-urdf-file models/g1/g1_29dof_spherehand.urdf 
+        --robot-config.robot-urdf-file models/g1/g1_29dof_spherehand.urdf
 "
-
 ```
 
-## Data conversion
+---
 
-From `holosoma/` directory:
+## 2. Data Conversion
+
+### Robot-only
 
 ```bash
-
-# Robot-Only Setting
 apptainer exec --nv --writable-tmpfs --bind /run apptainer/holosoma.sif bash -c "
     mkdir -p /home/gbesset && \
     ln -sf /root/.holosoma_deps /home/gbesset/.holosoma_deps && \
@@ -87,8 +93,11 @@ apptainer exec --nv --writable-tmpfs --bind /run apptainer/holosoma.sif bash -c 
         --object_name 'ground' \
         --once
 "
+```
 
-# Robot-Object Setting
+### Robot + object
+
+```bash
 apptainer exec --nv --writable-tmpfs --bind /run apptainer/holosoma.sif bash -c "
     mkdir -p /home/gbesset && \
     ln -sf /root/.holosoma_deps /home/gbesset/.holosoma_deps && \
@@ -109,14 +118,15 @@ apptainer exec --nv --writable-tmpfs --bind /run apptainer/holosoma.sif bash -c 
         --has_dynamic_object \
         --once
 "
-
 ```
 
-## Training
+---
+
+## 3. Training
+
+### Locomotion (MJWarp)
 
 ```bash
-
-# Locomotion Mujoco FastSAC
 apptainer exec --nv --writable-tmpfs \
     --bind /run \
     --bind /dev/shm \
@@ -134,8 +144,11 @@ apptainer exec --nv --writable-tmpfs \
         logger:wandb \
         --logger.video.enabled=False
 "
+```
 
-# WBT Isaac PPO / FastSAC (g1-29dof-wbt-fast-sac)
+### WBT IsaacSim
+
+```bash
 apptainer exec --nv \
     --bind /run \
     --bind /dev/shm \
@@ -164,8 +177,11 @@ apptainer exec --nv \
         --logger.video.enabled=False \
         --command.setup-terms.motion-command.params.motion-config.motion-file=\"holosoma/data/motions/g1_29dof/whole_body_tracking/sub3_largebox_003_mj.npz\"
 "
+```
 
-# WBT Isaac PPO / FastSAC (g1-29dof-wbt-fast-sac) WITH OBJECT
+### WBT IsaacSim + object
+
+```bash
 apptainer exec --nv \
     --bind /run \
     --bind /dev/shm \
@@ -196,9 +212,13 @@ apptainer exec --nv \
         --simulator.config.scene.rigid-objects.0.urdf-path=\"src/holosoma/holosoma/data/motions/g1_29dof/whole_body_tracking/objects_largebox.urdf\" \
         --simulator.config.scene.rigid-objects.0.position=\"[1.0,0.0,1.0]\"
 "
-# The 0.5 small delta is just a security to not have an explosive computing at the simulation reset. The object position is adjusted randomly right after the reset. 
+```
 
-# WBT Mujoco PPO / FastSAC (g1-29dof-wbt-fast-sac)
+> The object position offset is a safety margin to avoid explosive forces at simulation reset. The actual position is randomized immediately after reset.
+
+### WBT MJWarp
+
+```bash
 apptainer exec --nv --writable-tmpfs \
     --bind /run \
     --bind /dev/shm \
@@ -218,8 +238,11 @@ apptainer exec --nv --writable-tmpfs \
         --training.num-envs=512 \
         --command.setup-terms.motion-command.params.motion-config.motion-file=\"holosoma/data/motions/g1_29dof/whole_body_tracking/sub3_largebox_003_mj.npz\"
 "
+```
 
-#WBT Mujoco Multi GPU
+### WBT MJWarp multi-GPU
+
+```bash
 apptainer exec --nv --writable-tmpfs \
     --bind /run \
     --bind /dev/shm \
@@ -241,8 +264,11 @@ apptainer exec --nv --writable-tmpfs \
         --reward.terms.undesired_contacts.weight=-0.1 \
         --command.setup-terms.motion-command.params.motion-config.motion-file=\"holosoma/data/motions/g1_29dof/whole_body_tracking/sub3_largebox_003_mj.npz\"
 "
+```
 
-# WBT Mujoco PPO / FastSAC (g1-29dof-wbt-fast-sac) WITH OBJECT
+### WBT MJWarp + object
+
+```bash
 apptainer exec --nv --writable-tmpfs \
     --bind /run \
     --bind /dev/shm \
@@ -269,5 +295,39 @@ apptainer exec --nv --writable-tmpfs \
         --terrain.terrain-term.obj-file-path=\"\" \
         --simulator.config.mujoco-warp.ccd-iterations=200
 "
-
 ```
+
+---
+
+## 4. Inference
+
+### Via native SDK (Unitree / Booster)
+
+The default path uses the robot's native SDK directly (DDS for Unitree, SDK2PY for Booster).
+
+```bash
+python src/holosoma_inference/holosoma_inference/run_policy.py \
+    inference:g1-29dof-loco \
+    --task.model-path path/to/model.onnx
+```
+
+### Via ROS2
+
+Set `--robot.sdk-type=ros2` to route commands and state through ROS2 topics instead of the native SDK. This requires `rclpy` and a running ROS2 environment.
+
+```bash
+python src/holosoma_inference/holosoma_inference/run_policy.py \
+    inference:g1-29dof-loco \
+    --robot.sdk-type=ros2 \
+    --task.model-path path/to/model.onnx
+```
+
+ROS2 topics used by the interface:
+
+| Direction | Topic | Type | Content |
+|-----------|-------|------|---------|
+| Publish | `~/low_cmd` | `sensor_msgs/JointState` | Target positions, velocities, efforts |
+| Subscribe | `~/low_state` | `sensor_msgs/JointState` | Current joint positions and velocities |
+| Subscribe | `~/imu` | `sensor_msgs/Imu` | Orientation quaternion and angular velocity |
+
+A bridge node on the robot side is needed to relay these topics to/from the native SDK.
