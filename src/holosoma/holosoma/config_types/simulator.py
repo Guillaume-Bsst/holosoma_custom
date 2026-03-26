@@ -135,8 +135,8 @@ class SimEngineConfig:
     substeps: int
     """Number of substeps per physics frame."""
 
-    physx: PhysxConfig
-    """PhysX solver configuration."""
+    physx: PhysxConfig | None = None
+    """PhysX solver configuration. Only used by IsaacGym/IsaacSim — leave None for MuJoCo."""
 
     render_mode: str = "human"
     """Rendering mode requested from the simulator."""

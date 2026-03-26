@@ -39,7 +39,7 @@ apptainer exec --nv --writable-tmpfs \
     export WANDB_INSECURE_DISABLE_SSL=true && \
     cd /workspace/holosoma && \
     python src/holosoma/holosoma/train_agent.py \
-        exp:g1-29dof-wbt \
+        exp:g1-29dof-wbt-mjwarp \
         simulator:mjwarp \
         logger:wandb \
         --logger.video.enabled=False \

@@ -15,7 +15,7 @@ from holosoma.config_values import (
     terrain,
 )
 
-g1_29dof_wbt = ExperimentConfig(
+g1_29dof_wbt_isaacsim = ExperimentConfig(
     training=TrainingConfig(
         project="WholeBodyTracking",
         name="g1_29dof_wbt_manager",
@@ -56,7 +56,7 @@ g1_29dof_wbt = ExperimentConfig(
     observation=observation.g1_29dof_wbt_observation,
     action=action.g1_29dof_joint_pos,
     termination=termination.g1_29dof_wbt_termination,
-    randomization=randomization.g1_29dof_wbt_randomization,
+    randomization=randomization.g1_29dof_wbt_randomization_isaacsim,
     command=command.g1_29dof_wbt_command,
     curriculum=curriculum.g1_29dof_wbt_curriculum,
     reward=reward.g1_29dof_wbt_reward,
@@ -117,7 +117,7 @@ g1_29dof_wbt_fast_sac = ExperimentConfig(
     observation=observation.g1_29dof_wbt_observation,
     action=action.g1_29dof_joint_pos,
     termination=termination.g1_29dof_wbt_termination,
-    randomization=randomization.g1_29dof_wbt_randomization,
+    randomization=randomization.g1_29dof_wbt_randomization_isaacsim,
     command=command.g1_29dof_wbt_command,
     curriculum=curriculum.g1_29dof_wbt_curriculum,
     reward=reward.g1_29dof_wbt_fast_sac_reward,
@@ -134,8 +134,18 @@ g1_29dof_wbt_fast_sac = ExperimentConfig(
     ),
 )
 
-g1_29dof_wbt_w_object = replace(
-    g1_29dof_wbt,
+g1_29dof_wbt_mjwarp = replace(
+    g1_29dof_wbt_isaacsim,
+    randomization=randomization.g1_29dof_wbt_randomization_mjwarp,
+)
+
+g1_29dof_wbt_mjwarp_w_object = replace(
+    g1_29dof_wbt_isaacsim_w_object,
+    randomization=randomization.g1_29dof_wbt_randomization_mjwarp_w_object,
+)
+
+g1_29dof_wbt_isaacsim_w_object = replace(
+    g1_29dof_wbt_isaacsim,
     command=command.g1_29dof_wbt_command_w_object,
     robot=replace(
         robot.g1_29dof_w_object,
@@ -149,7 +159,7 @@ g1_29dof_wbt_w_object = replace(
         ),
         init_state=replace(robot.g1_29dof_w_object.init_state, pos=[0.0, 0.0, 0.76]),
     ),
-    randomization=randomization.g1_29dof_wbt_randomization_w_object,
+    randomization=randomization.g1_29dof_wbt_randomization_isaacsim_w_object,
     observation=observation.g1_29dof_wbt_observation_w_object,
     reward=reward.g1_29dof_wbt_reward_w_object,
     simulator=replace(
@@ -170,7 +180,7 @@ g1_29dof_wbt_fast_sac_w_object = replace(
         ),
         init_state=replace(robot.g1_29dof_w_object.init_state, pos=[0.0, 0.0, 0.76]),
     ),
-    randomization=randomization.g1_29dof_wbt_randomization_w_object,
+    randomization=randomization.g1_29dof_wbt_randomization_isaacsim_w_object,
     observation=observation.g1_29dof_wbt_observation_w_object,
     reward=reward.g1_29dof_wbt_reward_w_object,
     simulator=replace(
@@ -180,24 +190,31 @@ g1_29dof_wbt_fast_sac_w_object = replace(
 )
 
 __all__ = [
-    "g1_29dof_wbt",
+    "g1_29dof_wbt_isaacsim",
+    "g1_29dof_wbt_isaacsim_w_object",
+    "g1_29dof_wbt_mjwarp",
+    "g1_29dof_wbt_mjwarp_w_object",
     "g1_29dof_wbt_fast_sac",
     "g1_29dof_wbt_fast_sac_w_object",
-    "g1_29dof_wbt_w_object",
 ]
 
 """
-Example 1: Robot only:
+Example 1: Robot only (IsaacSim):
 python src/holosoma/holosoma/train_agent.py \
-    exp:g1-29dof-wbt
+    exp:g1-29dof-wbt-isaacsim
 
-Example 2: Robot+Object:
+Example 2: Robot only (MJWarp):
 python src/holosoma/holosoma/train_agent.py \
-  exp:g1-29dof-wbt-w-object
+    exp:g1-29dof-wbt-mjwarp \
+    simulator:mjwarp
 
-Example 3: Robot+Terrain:
+Example 3: Robot+Object (IsaacSim):
 python src/holosoma/holosoma/train_agent.py \
-  exp:g1-29dof-wbt \
+  exp:g1-29dof-wbt-isaacsim-w-object
+
+Example 4: Robot+Terrain (IsaacSim):
+python src/holosoma/holosoma/train_agent.py \
+  exp:g1-29dof-wbt-isaacsim \
   terrain:terrain-load-obj \
   --terrain.terrain-term.obj-file-path="holosoma/data/motions/g1_29dof/whole_body_tracking/terrain_slope.obj" \
   --command.setup_terms.motion_command.params.motion_config.motion_file\

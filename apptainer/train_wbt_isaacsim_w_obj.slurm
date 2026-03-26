@@ -51,7 +51,7 @@ apptainer exec --nv \
     export WANDB_INSECURE_DISABLE_SSL=true && \
     cd /workspace/holosoma && \
     xvfb-run -a python src/holosoma/holosoma/train_agent.py \
-        exp:g1-29dof-wbt-w-object \
+        exp:g1-29dof-wbt-isaacsim-w-object \
         simulator:isaacsim-w-object \
         logger:wandb \
         --logger.video.enabled=False \

@@ -36,7 +36,7 @@ apptainer exec --nv --writable-tmpfs \
     export WANDB_INSECURE_DISABLE_SSL=true && \
     cd /workspace/holosoma && \
     python src/holosoma/holosoma/train_agent.py \
-        exp:g1-29dof-wbt-w-object \
+        exp:g1-29dof-wbt-mjwarp-w-object \
         simulator:mjwarp-w-object \
         logger:wandb \
         terrain:terrain-locomotion-plane \

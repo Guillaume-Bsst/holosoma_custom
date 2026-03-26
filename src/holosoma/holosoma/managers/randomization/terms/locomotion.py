@@ -935,6 +935,7 @@ def randomize_friction_startup(
         )
 
 
+@mujoco_required_field("geom_friction")
 def randomize_robot_rigid_body_material_startup(
     env,
     env_ids: Sequence[int] | torch.Tensor | None = None,
@@ -954,6 +955,9 @@ def randomize_robot_rigid_body_material_startup(
         return
 
     simulator = env.simulator
+    # MuJoCo has no static/dynamic distinction — sample from the union of both ranges.
+    low = min(static_friction_range[0], dynamic_friction_range[0])
+    high = max(static_friction_range[1], dynamic_friction_range[1])
 
     # ---------------------------------------------------------------------
     # ISAAC SIM
@@ -971,7 +975,6 @@ def randomize_robot_rigid_body_material_startup(
         asset_cfg = SceneEntityCfg("robot", body_names=".*")
         asset_cfg.resolve(simulator.scene)
 
-        num_buckets = 64
         _isaacsim_randomize_rigid_body_material(
             simulator,
             env_ids_cpu,
@@ -979,44 +982,61 @@ def randomize_robot_rigid_body_material_startup(
             static_friction_range=(static_friction_range[0], static_friction_range[1]),
             dynamic_friction_range=(dynamic_friction_range[0], dynamic_friction_range[1]),
             restitution_range=(restitution_range[0], restitution_range[1]),
-            num_buckets=num_buckets,
+            num_buckets=64,
         )
 
     # ---------------------------------------------------------------------
-    # MJWARP
+    # MJWARP — per-environment randomization via warp_randomization
+    # geom_friction is [ngeom, 3]: axis 0 = sliding friction
     # ---------------------------------------------------------------------
-    elif simulator.__class__.__name__ == "MuJoCo":
-        import mujoco
-        import numpy as np
-        mj_model = simulator.backend.model
+    elif simulator.simulator_config.mujoco_backend == MujocoBackend.WARP:
+        import mujoco as mj
 
-        if not hasattr(env, '_mj_robot_geom_ids'):
-            env._mj_robot_geom_ids = []
-            for i in range(mj_model.ngeom):
-                name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_GEOM, i)
-                if name and name.startswith("robot_"):
-                    env._mj_robot_geom_ids.append(i)
-            env._mj_robot_geom_ids = np.array(env._mj_robot_geom_ids, dtype=np.int32)
-            logger.info(f"[Randomization] Registered {len(env._mj_robot_geom_ids)} robot geoms for material DR.")
+        from holosoma.simulator.mujoco.backends.warp_randomization import randomize_field
 
-        if len(env._mj_robot_geom_ids) == 0:
+        if not hasattr(env, "_mj_robot_geom_ids_t"):
+            mj_model = simulator.backend.model
+            geom_ids = [
+                i for i in range(mj_model.ngeom)
+                if (name := mj.mj_id2name(mj_model, mj.mjtObj.mjOBJ_GEOM, i)) and name.startswith("robot_")
+            ]
+            env._mj_robot_geom_ids_t = torch.tensor(geom_ids, dtype=torch.long, device=simulator.sim_device)
+            logger.info(f"[Randomization] Registered {len(geom_ids)} robot geoms for MJWarp material DR.")
+
+        if env._mj_robot_geom_ids_t.numel() == 0:
             return
 
-        # MuJoCo does not distinguish static/dynamic friction; geom_friction[:, 0] is the
-        # sliding friction coefficient. We sample from the combined range of both inputs.
-        low = min(static_friction_range[0], dynamic_friction_range[0])
-        high = max(static_friction_range[1], dynamic_friction_range[1])
-        new_friction = np.random.uniform(low=low, high=high)
+        randomize_field(
+            simulator,
+            field=getattr(randomize_robot_rigid_body_material_startup, MUJOCO_FIELD_ATTR),
+            ranges={0: (low, high)},
+            env_ids=idx,
+            entity_ids=env._mj_robot_geom_ids_t,
+            operation="abs",
+        )
 
-        mj_model.geom_friction[env._mj_robot_geom_ids, 0] = new_friction
+    # ---------------------------------------------------------------------
+    # MUJOCO CLASSIC — single env, direct model modification is acceptable
+    # ---------------------------------------------------------------------
+    elif simulator.__class__.__name__ == "MuJoCo":
+        import mujoco as mj
+        import numpy as np
 
-        mujoco.mj_setConst(mj_model, simulator.backend.data)
+        mj_model = simulator.backend.model
+        geom_ids = [
+            i for i in range(mj_model.ngeom)
+            if (name := mj.mj_id2name(mj_model, mj.mjtObj.mjOBJ_GEOM, i)) and name.startswith("robot_")
+        ]
+        if geom_ids:
+            mj_model.geom_friction[geom_ids, 0] = np.random.uniform(low=low, high=high)
+            mj.mj_setConst(mj_model, simulator.backend.data)
 
     else:
         raise RandomizerNotSupportedError(
-            f"randomize_robot_rigid_body_material_startup only supports IsaacSim, got {type(simulator).__name__}"
+            f"randomize_robot_rigid_body_material_startup not supported for {type(simulator).__name__}"
         )
 
+@mujoco_required_field("geom_friction")
 def randomize_object_rigid_body_material_startup(
     env,
     env_ids: Sequence[int] | torch.Tensor | None = None,
@@ -1036,6 +1056,11 @@ def randomize_object_rigid_body_material_startup(
         return
 
     simulator = env.simulator
+
+    # MuJoCo does not distinguish static/dynamic friction; geom_friction[:, 0] is the
+    # sliding friction coefficient. We sample from the combined range of both inputs.
+    low = min(static_friction_range[0], dynamic_friction_range[0])
+    high = max(static_friction_range[1], dynamic_friction_range[1])
 
     # ---------------------------------------------------------------------
     # ISAAC SIM
@@ -1068,37 +1093,58 @@ def randomize_object_rigid_body_material_startup(
         )
 
     # ---------------------------------------------------------------------
-    # MJWARP
+    # MJWARP — per-environment randomization via warp_randomization
+    # geom_friction is [ngeom, 3]: axis 0 = sliding friction
+    # ---------------------------------------------------------------------
+    elif simulator.simulator_config.mujoco_backend == MujocoBackend.WARP:
+        import mujoco as mj
+
+        from holosoma.simulator.mujoco.backends.warp_randomization import randomize_field
+
+        if not hasattr(env, "_mj_object_geom_ids_t"):
+            mj_model = simulator.backend.model
+            geom_ids = [
+                i for i in range(mj_model.ngeom)
+                if (name := mj.mj_id2name(mj_model, mj.mjtObj.mjOBJ_GEOM, i)) and ("box" in name or "object" in name)
+            ]
+            env._mj_object_geom_ids_t = torch.tensor(geom_ids, dtype=torch.long, device=simulator.sim_device)
+            logger.info(f"[Randomization] Registered {len(geom_ids)} object geoms for MJWarp material DR.")
+
+        if env._mj_object_geom_ids_t.numel() == 0:
+            return
+
+        randomize_field(
+            simulator,
+            field=getattr(randomize_object_rigid_body_material_startup, MUJOCO_FIELD_ATTR),
+            ranges={0: (low, high)},
+            env_ids=idx,
+            entity_ids=env._mj_object_geom_ids_t,
+            operation="abs",
+        )
+
+    # ---------------------------------------------------------------------
+    # MUJOCO CLASSIC — single env, direct model modification is acceptable
     # ---------------------------------------------------------------------
     elif simulator.__class__.__name__ == "MuJoCo":
-        import mujoco
+        import mujoco as mj
         import numpy as np
+
         mj_model = simulator.backend.model
 
-        if not hasattr(env, '_mj_object_geom_ids'):
-            env._mj_object_geom_ids = []
-            for i in range(mj_model.ngeom):
-                name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_GEOM, i)
-                if name and ("box" in name or "object" in name):
-                    env._mj_object_geom_ids.append(i)
-            env._mj_object_geom_ids = np.array(env._mj_object_geom_ids, dtype=np.int32)
+        if not hasattr(env, "_mj_object_geom_ids"):
+            geom_ids = [
+                i for i in range(mj_model.ngeom)
+                if (name := mj.mj_id2name(mj_model, mj.mjtObj.mjOBJ_GEOM, i)) and ("box" in name or "object" in name)
+            ]
+            env._mj_object_geom_ids = np.array(geom_ids, dtype=np.int32)
             logger.info(f"[Randomization] Registered {len(env._mj_object_geom_ids)} object geoms for material DR.")
 
         if len(env._mj_object_geom_ids) == 0:
             logger.warning("[Randomization] No object geoms found for MuJoCo material randomization.")
             return
 
-        # MuJoCo does not distinguish static/dynamic friction; geom_friction[:, 0] is the
-        # sliding friction coefficient. We sample from the combined range of both inputs.
-        low = min(static_friction_range[0], dynamic_friction_range[0])
-        high = max(static_friction_range[1], dynamic_friction_range[1])
-        new_friction = np.random.uniform(low=low, high=high)
-
-        mj_model.geom_friction[env._mj_object_geom_ids, 0] = new_friction
-
-        mujoco.mj_setConst(mj_model, simulator.backend.data)
-
-        return
+        mj_model.geom_friction[env._mj_object_geom_ids, 0] = np.random.uniform(low=low, high=high)
+        mj.mj_setConst(mj_model, simulator.backend.data)
 
     else:
         raise RandomizerNotSupportedError(
@@ -1106,6 +1152,7 @@ def randomize_object_rigid_body_material_startup(
         )
 
 
+@mujoco_required_field("body_mass")
 def randomize_object_rigid_body_mass_startup(
     env,
     env_ids: Sequence[int] | torch.Tensor | None = None,
@@ -1130,7 +1177,6 @@ def randomize_object_rigid_body_mass_startup(
     if simulator.__class__.__name__ == "IsaacSim":
         try:
             from isaaclab.managers import SceneEntityCfg
-
         except ImportError as exc:  # pragma: no cover - defensive
             raise RuntimeError("IsaacSim mass randomization requires isaaclab.") from exc
 
@@ -1152,42 +1198,53 @@ def randomize_object_rigid_body_mass_startup(
             operation="add",
         )
 
-
     # ---------------------------------------------------------------------
-    # MJWARP
+    # MJWARP — per-environment randomization via warp_randomization
     # ---------------------------------------------------------------------
-    elif simulator.__class__.__name__ == "MuJoCo":
-        import mujoco
-        import numpy as np
-        mj_model = simulator.backend.model
+    elif simulator.simulator_config.mujoco_backend == MujocoBackend.WARP:
+        from holosoma.simulator.mujoco.backends.warp_randomization import randomize_field
 
-        if not hasattr(env, '_mj_object_body_ids'):
-            body_ids = []
-            for i in range(mj_model.nbody):
-                name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_BODY, i)
-                if name and ("box" in name.lower() or "object" in name.lower()):
-                    body_ids.append(i)
-            env._mj_object_body_ids = np.array(body_ids, dtype=np.int32)
-            logger.info(f"[Randomization] Registered {len(env._mj_object_body_ids)} object bodies for mass DR.")
+        _scene_cfg = getattr(getattr(simulator, "simulator_config", None), "scene", None)
+        _rigid_objs = getattr(_scene_cfg, "rigid_objects", None) or []
+        object_names = [obj.name for obj in _rigid_objs]
 
-        if len(env._mj_object_body_ids) == 0:
-            logger.warning("[Randomization] No object bodies found for MuJoCo mass randomization.")
+        if not object_names:
+            logger.warning("[Randomization] No rigid objects configured for MJWarp object mass DR.")
             return
 
-        for body_id in env._mj_object_body_ids:
-            added_mass = np.random.uniform(mass_distribution_params[0], mass_distribution_params[1])
-            mj_model.body_mass[body_id] += added_mass
-        
-        mujoco.mj_setConst(mj_model, simulator.backend.data)
-        return
+        randomize_field(
+            simulator,
+            field=getattr(randomize_object_rigid_body_mass_startup, MUJOCO_FIELD_ATTR),
+            ranges=(mass_distribution_params[0], mass_distribution_params[1]),
+            env_ids=idx,
+            entity_names=object_names,
+            entity_type="body",
+            operation="add",
+        )
 
+    # ---------------------------------------------------------------------
+    # MUJOCO CLASSIC — single env, direct model modification is acceptable
+    # ---------------------------------------------------------------------
+    elif simulator.__class__.__name__ == "MuJoCo":
+        import mujoco as mj
+        import numpy as np
+
+        mj_model = simulator.backend.model
+        for i in range(mj_model.nbody):
+            name = mj.mj_id2name(mj_model, mj.mjtObj.mjOBJ_BODY, i)
+            if name and ("box" in name.lower() or "object" in name.lower()):
+                mj_model.body_mass[i] += np.random.uniform(
+                    mass_distribution_params[0], mass_distribution_params[1]
+                )
+        mj.mj_setConst(mj_model, simulator.backend.data)
 
     else:
         raise RandomizerNotSupportedError(
-            f"randomize_object_rigid_body_mass_startup only supports IsaacSim and MuJoCo, got {type(simulator).__name__}"
+            f"randomize_object_rigid_body_mass_startup not supported for {type(simulator).__name__}"
         )
 
 
+@mujoco_required_field("body_inertia")
 def randomize_object_rigid_body_inertia_startup(
     env,
     env_ids: Sequence[int] | torch.Tensor | None = None,
@@ -1230,7 +1287,10 @@ def randomize_object_rigid_body_inertia_startup(
         ordering = ["Ixx", "Iyy", "Izz", "Ixy", "Iyz", "Ixz"]
         lower_bounds = [inertia_distribution_params_dict[key][0] for key in ordering]
         upper_bounds = [inertia_distribution_params_dict[key][1] for key in ordering]
-        inertia_distribution_params = (torch.tensor(lower_bounds, device="cpu"), torch.tensor(upper_bounds, device="cpu"))
+        inertia_distribution_params = (
+            torch.tensor(lower_bounds, device="cpu"),
+            torch.tensor(upper_bounds, device="cpu"),
+        )
 
         randomize_rigid_body_inertia(
             simulator,
@@ -1242,39 +1302,56 @@ def randomize_object_rigid_body_inertia_startup(
         )
 
     # ---------------------------------------------------------------------
-    # MJWARP
+    # MJWARP — per-environment randomization via warp_randomization
+    # body_inertia is [nbody, 3] diagonal: axis 0=Ixx, 1=Iyy, 2=Izz
     # ---------------------------------------------------------------------
-    elif simulator.__class__.__name__ == "MuJoCo":
-        import mujoco
-        import numpy as np
-        mj_model = simulator.backend.model
+    elif simulator.simulator_config.mujoco_backend == MujocoBackend.WARP:
+        from holosoma.simulator.mujoco.backends.warp_randomization import randomize_field
 
-        if not hasattr(env, '_mj_object_body_ids'):
-            body_ids = []
-            for i in range(mj_model.nbody):
-                name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_BODY, i)
-                if name and ("box" in name.lower() or "object" in name.lower()):
-                    body_ids.append(i)
-            env._mj_object_body_ids = np.array(body_ids, dtype=np.int32)
+        _scene_cfg = getattr(getattr(simulator, "simulator_config", None), "scene", None)
+        _rigid_objs = getattr(_scene_cfg, "rigid_objects", None) or []
+        object_names = [obj.name for obj in _rigid_objs]
 
-        if len(env._mj_object_body_ids) == 0:
+        if not object_names:
+            logger.warning("[Randomization] No rigid objects configured for MJWarp object inertia DR.")
             return
 
-        for body_id in env._mj_object_body_ids:
-            scale_xx = np.random.uniform(*inertia_distribution_params_dict["Ixx"])
-            scale_yy = np.random.uniform(*inertia_distribution_params_dict["Iyy"])
-            scale_zz = np.random.uniform(*inertia_distribution_params_dict["Izz"])
-            
-            mj_model.body_inertia[body_id, 0] *= scale_xx
-            mj_model.body_inertia[body_id, 1] *= scale_yy
-            mj_model.body_inertia[body_id, 2] *= scale_zz
+        axis_map = {"Ixx": 0, "Iyy": 1, "Izz": 2}
+        ranges_dict: dict[int, tuple[float, float]] = {
+            axis_map[key]: (float(val[0]), float(val[1]))
+            for key, val in inertia_distribution_params_dict.items()
+            if key in axis_map
+        }
 
-        mujoco.mj_setConst(mj_model, simulator.backend.data)
-        return
+        randomize_field(
+            simulator,
+            field=getattr(randomize_object_rigid_body_inertia_startup, MUJOCO_FIELD_ATTR),
+            ranges=ranges_dict,
+            env_ids=idx,
+            entity_names=object_names,
+            entity_type="body",
+            operation="scale",
+        )
+
+    # ---------------------------------------------------------------------
+    # MUJOCO CLASSIC — single env, direct model modification is acceptable
+    # ---------------------------------------------------------------------
+    elif simulator.__class__.__name__ == "MuJoCo":
+        import mujoco as mj
+        import numpy as np
+
+        mj_model = simulator.backend.model
+        for i in range(mj_model.nbody):
+            name = mj.mj_id2name(mj_model, mj.mjtObj.mjOBJ_BODY, i)
+            if name and ("box" in name.lower() or "object" in name.lower()):
+                mj_model.body_inertia[i, 0] *= np.random.uniform(*inertia_distribution_params_dict["Ixx"])
+                mj_model.body_inertia[i, 1] *= np.random.uniform(*inertia_distribution_params_dict["Iyy"])
+                mj_model.body_inertia[i, 2] *= np.random.uniform(*inertia_distribution_params_dict["Izz"])
+        mj.mj_setConst(mj_model, simulator.backend.data)
 
     else:
         raise RandomizerNotSupportedError(
-            f"randomize_object_rigid_body_inertia_startup only supports IsaacSim and MuJoCo, got {type(simulator).__name__}"
+            f"randomize_object_rigid_body_inertia_startup not supported for {type(simulator).__name__}"
         )
 
 
