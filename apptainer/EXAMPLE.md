@@ -159,7 +159,7 @@ apptainer exec --nv \
     export WANDB_INSECURE_DISABLE_SSL=true && \
     cd /workspace/holosoma && \
     xvfb-run -a python src/holosoma/holosoma/train_agent.py \
-        exp:g1-29dof-wbt \
+        exp:g1-29dof-wbt-isaacsim \
         logger:wandb \
         --logger.video.enabled=False \
         --command.setup-terms.motion-command.params.motion-config.motion-file=\"holosoma/data/motions/g1_29dof/whole_body_tracking/sub3_largebox_003_mj.npz\"
@@ -187,7 +187,7 @@ apptainer exec --nv \
     conda activate hssim && \
     cd /workspace/holosoma && \
     xvfb-run -a python src/holosoma/holosoma/train_agent.py \
-        exp:g1-29dof-wbt-w-object \
+        exp:g1-29dof-wbt-isaacsim-w-object \
         simulator:isaacsim-w-object \
         logger:wandb \
         --logger.video.enabled=False \
@@ -213,18 +213,15 @@ apptainer exec --nv --writable-tmpfs \
     export WANDB_INSECURE_DISABLE_SSL=true && \
     cd /workspace/holosoma && \
     xvfb-run -a python src/holosoma/holosoma/train_agent.py \
-        exp:g1-29dof-wbt \
+        exp:g1-29dof-wbt-mjwarp \
         simulator:mjwarp \
         logger:wandb \
         --logger.video.enabled=False \
-        --reward.terms.undesired_contacts.weight=-0.1 \
         --training.num-envs=512 \
-        --algo.config.actor_learning_rate=0.001 \
-        --algo.config.critic_learning_rate=0.001 \
         --command.setup-terms.motion-command.params.motion-config.motion-file=\"holosoma/data/motions/g1_29dof/whole_body_tracking/sub3_largebox_003_mj.npz\"
 "
 
-#WBT Mujoco Multi GPU de l'extreme
+#WBT Mujoco Multi GPU
 apptainer exec --nv --writable-tmpfs \
     --bind /run \
     --bind /dev/shm \
@@ -238,7 +235,7 @@ apptainer exec --nv --writable-tmpfs \
     export WANDB_INSECURE_DISABLE_SSL=true && \
     cd /workspace/holosoma && \
     xvfb-run -a torchrun --nproc_per_node=2 src/holosoma/holosoma/train_agent.py \
-        exp:g1-29dof-wbt \
+        exp:g1-29dof-wbt-mjwarp \
         simulator:mjwarp \
         logger:wandb \
         --logger.video.enabled=False \
@@ -262,7 +259,7 @@ apptainer exec --nv --writable-tmpfs \
     export WANDB_INSECURE_DISABLE_SSL=true && \
     cd /workspace/holosoma && \
     xvfb-run -a python src/holosoma/holosoma/train_agent.py \
-        exp:g1-29dof-wbt-w-object \
+        exp:g1-29dof-wbt-mjwarp-w-object \
         simulator:mjwarp-w-object \
         logger:wandb \
         terrain:terrain-locomotion-plane \

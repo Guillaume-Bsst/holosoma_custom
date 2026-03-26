@@ -139,11 +139,6 @@ g1_29dof_wbt_mjwarp = replace(
     randomization=randomization.g1_29dof_wbt_randomization_mjwarp,
 )
 
-g1_29dof_wbt_mjwarp_w_object = replace(
-    g1_29dof_wbt_isaacsim_w_object,
-    randomization=randomization.g1_29dof_wbt_randomization_mjwarp_w_object,
-)
-
 g1_29dof_wbt_isaacsim_w_object = replace(
     g1_29dof_wbt_isaacsim,
     command=command.g1_29dof_wbt_command_w_object,
@@ -166,6 +161,11 @@ g1_29dof_wbt_isaacsim_w_object = replace(
         simulator.isaacsim,
         config=replace(simulator.isaacsim.config, scene=replace(simulator.isaacsim.config.scene, env_spacing=0.0)),
     ),
+)
+
+g1_29dof_wbt_mjwarp_w_object = replace(
+    g1_29dof_wbt_isaacsim_w_object,
+    randomization=randomization.g1_29dof_wbt_randomization_mjwarp_w_object,
 )
 
 g1_29dof_wbt_fast_sac_w_object = replace(
