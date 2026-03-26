@@ -63,15 +63,16 @@ class ROS2Interface(BaseInterface):
 
         self._node = Node("holosoma_policy")
 
-        # Publisher: joint commands
-        self._cmd_pub = self._node.create_publisher(JointState, "~/low_cmd", 10)
+        # Publishers: joint commands and PD gains
+        self._cmd_pub = self._node.create_publisher(JointState, "/holosoma/low_cmd", 10)
+        self._gains_pub = self._node.create_publisher(JointState, "/holosoma/pd_gains", 10)
 
         # Subscribers: robot state
         self._state_sub = self._node.create_subscription(
-            JointState, "~/low_state", self._low_state_callback, 10
+            JointState, "/holosoma/low_state", self._low_state_callback, 10
         )
         self._imu_sub = self._node.create_subscription(
-            Imu, "~/imu", self._imu_callback, 10
+            Imu, "/holosoma/imu", self._imu_callback, 10
         )
 
         # Spin in background thread
@@ -136,14 +137,27 @@ class ROS2Interface(BaseInterface):
         kp_override: np.ndarray = None,
         kd_override: np.ndarray = None,
     ):
-        """Publish joint command to ROS2 topic."""
+        """Publish joint command and optional PD gain overrides via ROS2."""
+        now = self._node.get_clock().now().to_msg()
+
+        # Joint command
         msg = JointState()
-        msg.header.stamp = self._node.get_clock().now().to_msg()
+        msg.header.stamp = now
         msg.name = list(self.robot_config.dof_names)
         msg.position = cmd_q.tolist()
         msg.velocity = cmd_dq.tolist()
         msg.effort = cmd_tau.tolist()
         self._cmd_pub.publish(msg)
+
+        # PD gains (publish every cycle so the bridge always has the latest)
+        kp = np.array(kp_override if kp_override is not None else self.robot_config.motor_kp)
+        kd = np.array(kd_override if kd_override is not None else self.robot_config.motor_kd)
+        gains_msg = JointState()
+        gains_msg.header.stamp = now
+        gains_msg.name = list(self.robot_config.dof_names)
+        gains_msg.position = (kp * self._kp_level).tolist()  # KP in position field
+        gains_msg.velocity = (kd * self._kd_level).tolist()  # KD in velocity field
+        self._gains_pub.publish(gains_msg)
 
     def get_joystick_msg(self):
         """No joystick via ROS2 — use keyboard or a separate Joy node."""

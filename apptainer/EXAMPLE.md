@@ -311,7 +311,7 @@ python src/holosoma_inference/holosoma_inference/run_policy.py \
     --task.model-path path/to/model.onnx
 ```
 
-### Via ROS2
+### Via ROS2 (real robot)
 
 Set `--robot.sdk-type=ros2` to route commands and state through ROS2 topics instead of the native SDK. This requires `rclpy` and a running ROS2 environment.
 
@@ -322,12 +322,48 @@ python src/holosoma_inference/holosoma_inference/run_policy.py \
     --task.model-path path/to/model.onnx
 ```
 
-ROS2 topics used by the interface:
+A bridge node on the robot side is needed to relay these topics to/from the native SDK.
+
+### Sim2Sim (local policy + MuJoCo)
+
+Run the policy against a local MuJoCo simulation via ROS2. This requires two terminals — one for the simulator with the ROS2 bridge enabled, and one for the policy.
+
+**Terminal 1 — Simulator (env `hsmujoco`):**
+
+```bash
+conda activate hsmujoco
+source /opt/ros/humble/setup.bash
+python src/holosoma/holosoma/run_sim.py \
+    simulator:mujoco \
+    robot:g1-29dof \
+    terrain:terrain-locomotion-plane \
+    --robot.bridge.sdk-type=ros2 \
+    --simulator.config.bridge.enabled=True \
+    --simulator.config.bridge.interface=lo
+```
+
+**Terminal 2 — Policy (env `hsinference`):**
+
+```bash
+conda activate hsinference
+source /opt/ros/humble/setup.bash
+python src/holosoma_inference/holosoma_inference/run_policy.py \
+    inference:g1-29dof-wbt \
+    --robot.sdk-type=ros2 \
+    --task.model-path wandb://guibsst-inria/WholeBodyTracking/dcpxirww/model_16000.onnx \
+    --task.no-use-joystick \
+    --task.use-sim-time \
+    --task.rl-rate 50 \
+    --task.interface lo
+```
+
+Both sides communicate over the following ROS2 topics:
 
 | Direction | Topic | Type | Content |
 |-----------|-------|------|---------|
-| Publish | `~/low_cmd` | `sensor_msgs/JointState` | Target positions, velocities, efforts |
-| Subscribe | `~/low_state` | `sensor_msgs/JointState` | Current joint positions and velocities |
-| Subscribe | `~/imu` | `sensor_msgs/Imu` | Orientation quaternion and angular velocity |
+| Sim → Policy | `/holosoma/low_state` | `sensor_msgs/JointState` | Current joint positions, velocities, efforts |
+| Sim → Policy | `/holosoma/imu` | `sensor_msgs/Imu` | Orientation quaternion and angular velocity |
+| Policy → Sim | `/holosoma/low_cmd` | `sensor_msgs/JointState` | Target positions, velocities, feedforward torques |
+| Policy → Sim | `/holosoma/pd_gains` | `sensor_msgs/JointState` | PD gains (KP in position, KD in velocity) |
 
-A bridge node on the robot side is needed to relay these topics to/from the native SDK.
+> Both processes must have access to `rclpy`. If running outside an Apptainer container, make sure to `source /opt/ros/<distro>/setup.bash` before launching each terminal.

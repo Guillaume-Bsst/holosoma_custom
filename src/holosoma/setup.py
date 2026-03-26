@@ -28,6 +28,7 @@ setup(
         "holosoma.bridge": [
             "unitree = holosoma.bridge.unitree:UnitreeSdk2Bridge",
             "booster = holosoma.bridge.booster:BoosterSdk2Bridge",
+            "ros2 = holosoma.bridge.ros2:ROS2Bridge",
         ],
     },
 )

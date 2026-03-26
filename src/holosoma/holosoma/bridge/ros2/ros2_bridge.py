@@ -1,135 +1,155 @@
+"""ROS2 bridge between the simulator and holosoma_inference.
+
+Mirrors the topics defined by the inference-side ROS2Interface so that
+run_sim.py and run_policy.py can communicate over standard ROS2 messages:
+
+    Sim  ──publish──►  /holosoma/low_state  (sensor_msgs/JointState)
+    Sim  ──publish──►  /holosoma/imu        (sensor_msgs/Imu)
+    Sim  ◄──subscribe── /holosoma/low_cmd   (sensor_msgs/JointState)
+    Sim  ◄──subscribe── /holosoma/pd_gains  (sensor_msgs/JointState)
+"""
+
 import threading
-from dataclasses import dataclass
 
 import numpy as np
 import rclpy
-from far_msgs.msg import PolicyActions, RobotState
-from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
+from loguru import logger
 from rclpy.node import Node
-from std_msgs.msg import Header
+from sensor_msgs.msg import Imu, JointState
 
 from holosoma.bridge.base import BasicSdk2Bridge
 
 
-@dataclass
-class MotorCommand:
-    """Motor command structure compatible with base_sim.py"""
-
-    q: float = 0.0  # Position command
-    dq: float = 0.0  # Velocity command
-    tau: float = 0.0  # Torque command
-    kp: float = 0.0  # Position gain
-    kd: float = 0.0  # Velocity gain
-
-
-class LowCmd:
-    """Low-level command structure compatible with base_sim.py"""
-
-    def __init__(self, num_motors):
-        self.motor_cmd: list[MotorCommand] = [MotorCommand() for _ in range(num_motors)]
-
-
 class ROS2Bridge(BasicSdk2Bridge):
-    def __init__(self, mj_model, mj_data, robot_config, lcm=None):
-        # Initialize BasicSdk2Bridge
-        super().__init__(mj_model, mj_data, robot_config, lcm)
+    """Simulator-side ROS2 bridge, compatible with the inference ROS2Interface."""
 
     def _init_sdk_components(self):
-        """Initialize ROS2-specific components."""
+        """Initialize ROS2 node, publishers and subscribers."""
         if not rclpy.ok():
             rclpy.init()
 
-        self._ros2_node = Node("mujoco_robot_state_publisher")
-        self.robot_state_pub = self._ros2_node.create_publisher(RobotState, "robot_state", 10)
+        self._node = Node("holosoma_sim_bridge")
 
-        # Subscribe to PolicyActions messages
-        self.policy_actions_sub = self._ros2_node.create_subscription(
-            PolicyActions,
-            "policy_actions",  # Topic name
-            self.low_cmd_handler,
-            10,
+        # Publishers — match what ROS2Interface subscribes to
+        self._state_pub = self._node.create_publisher(JointState, "/holosoma/low_state", 10)
+        self._imu_pub = self._node.create_publisher(Imu, "/holosoma/imu", 10)
+
+        # Subscribers — match what ROS2Interface publishes
+        self._cmd_sub = self._node.create_subscription(
+            JointState, "/holosoma/low_cmd", self._low_cmd_callback, 10
+        )
+        self._gains_sub = self._node.create_subscription(
+            JointState, "/holosoma/pd_gains", self._pd_gains_callback, 10
         )
 
-        # Thread for rclpy.spin()
-        self.spin_thread = threading.Thread(target=rclpy.spin, args=(self._ros2_node,), daemon=True)
-        self.spin_thread.start()
+        # Command buffer
+        self._lock = threading.Lock()
+        self._cmd_q = np.zeros(self.num_motor)
+        self._cmd_dq = np.zeros(self.num_motor)
+        self._cmd_tau = np.zeros(self.num_motor)
+        self._cmd_received = False
 
-        # Initialize low_cmd with proper structure
-        self.low_cmd = LowCmd(self.num_motor)
+        # Default control gains from robot config (partial key matching)
+        stiffness = self.robot.control.stiffness
+        damping = self.robot.control.damping
+        self._kp = np.zeros(self.num_motor)
+        self._kd = np.zeros(self.num_motor)
+        for i, dof_name in enumerate(self.robot.dof_names):
+            name_clean = dof_name.replace("_joint", "")
+            for key in stiffness:
+                if key in name_clean:
+                    self._kp[i] = stiffness[key]
+                    self._kd[i] = damping[key]
+                    break
 
-        # Get robot's control gains
-        self.Kps: list[float] = self.robot.MOTOR_KP
-        self.Kds: list[float] = self.robot.MOTOR_KD
+        # Spin in background thread
+        self._spin_thread = threading.Thread(target=rclpy.spin, args=(self._node,), daemon=True)
+        self._spin_thread.start()
 
-    def low_cmd_handler(self, msg):
-        """Handle PolicyActions messages and convert to low-level commands."""
-        if msg is None:
-            return
+        logger.info(
+            f"ROS2Bridge topics: pub=[{self._state_pub.topic_name}, {self._imu_pub.topic_name}], "
+            f"sub=[{self._cmd_sub.topic_name}, {self._gains_sub.topic_name}]"
+        )
 
-        # Ensure arrays have correct length
-        num_motors = min(self.num_motor, len(msg.joint_positions))
+    def _low_cmd_callback(self, msg: JointState):
+        """Handle incoming joint commands from the policy."""
+        with self._lock:
+            n = min(len(msg.position), self.num_motor)
+            self._cmd_q[:n] = msg.position[:n]
+            if msg.velocity:
+                nv = min(len(msg.velocity), self.num_motor)
+                self._cmd_dq[:nv] = msg.velocity[:nv]
+            if msg.effort:
+                nt = min(len(msg.effort), self.num_motor)
+                self._cmd_tau[:nt] = msg.effort[:nt]
+            self._cmd_received = True
 
-        # Update motor commands based on control mode
-        for i in range(num_motors):
-            motor_cmd = self.low_cmd.motor_cmd[i]
+    def _pd_gains_callback(self, msg: JointState):
+        """Handle incoming PD gains from the policy (KP in position, KD in velocity)."""
+        with self._lock:
+            n = min(len(msg.position), self.num_motor)
+            self._kp[:n] = msg.position[:n]
+            if msg.velocity:
+                nv = min(len(msg.velocity), self.num_motor)
+                self._kd[:nv] = msg.velocity[:nv]
 
-            if msg.control_mode == "position":
-                # Position control mode
-                motor_cmd.q = msg.joint_positions[i] if i < len(msg.joint_positions) else 0.0
-                motor_cmd.dq = 0.0  # No velocity feedforward in position mode
-                motor_cmd.tau = 0.0  # No torque feedforward in position mode
-                motor_cmd.kp = self.Kps[i]
-                motor_cmd.kd = self.Kds[i]
-            else:
-                raise NotImplementedError
+    def low_cmd_handler(self, msg=None):
+        """Poll is not needed — commands arrive via ROS2 subscription callback."""
 
     def publish_low_state(self):
-        """Publish low-level state via ROS2."""
-        msg = RobotState()
+        """Publish joint state and IMU data via ROS2."""
+        now = self._node.get_clock().now().to_msg()
 
-        # Header
-        msg.header = Header()
-        msg.header.stamp = self._ros2_node.get_clock().now().to_msg()
-        msg.header.frame_id = "world"
+        # --- Joint state ---
+        positions, velocities, _accelerations = self._get_dof_states()
+        actuator_forces = self._get_actuator_forces()
 
-        # Base pose
-        msg.base_pose = Pose()
-        msg.base_pose.position = Point(x=self.mj_data.qpos[0], y=self.mj_data.qpos[1], z=self.mj_data.qpos[2])
-        msg.base_pose.orientation = Quaternion(
-            x=self.mj_data.qpos[4], y=self.mj_data.qpos[5], z=self.mj_data.qpos[6], w=self.mj_data.qpos[3]
+        state_msg = JointState()
+        state_msg.header.stamp = now
+        state_msg.name = list(self.robot.dof_names)
+        state_msg.position = positions.tolist()
+        state_msg.velocity = velocities.tolist()
+        state_msg.effort = actuator_forces.tolist()
+        self._state_pub.publish(state_msg)
+
+        # --- IMU ---
+        quaternion, gyro, _accel = self._get_base_imu_data()
+        quat_np = quaternion.detach().cpu().numpy()  # [w, x, y, z]
+        gyro_np = gyro.detach().cpu().numpy()
+
+        imu_msg = Imu()
+        imu_msg.header.stamp = now
+        imu_msg.header.frame_id = "base_link"
+        # ROS2 Imu uses (x, y, z, w)
+        imu_msg.orientation.x = float(quat_np[1])
+        imu_msg.orientation.y = float(quat_np[2])
+        imu_msg.orientation.z = float(quat_np[3])
+        imu_msg.orientation.w = float(quat_np[0])
+        imu_msg.angular_velocity.x = float(gyro_np[0])
+        imu_msg.angular_velocity.y = float(gyro_np[1])
+        imu_msg.angular_velocity.z = float(gyro_np[2])
+        self._imu_pub.publish(imu_msg)
+
+    def compute_torques(self):
+        """Compute PD torques from the latest received command."""
+        with self._lock:
+            if not self._cmd_received:
+                return self.torques
+            q_target = self._cmd_q.copy()
+            dq_target = self._cmd_dq.copy()
+            tau_ff = self._cmd_tau.copy()
+            kp = self._kp.copy()
+            kd = self._kd.copy()
+
+        return self._compute_pd_torques(
+            tau_ff=tau_ff,
+            kp=kp,
+            kd=kd,
+            q_target=q_target,
+            dq_target=dq_target,
         )
 
-        # Base velocities
-        msg.base_angular_velocity = Vector3(x=self.mj_data.qvel[3], y=self.mj_data.qvel[4], z=self.mj_data.qvel[5])
-
-        # Projected gravity (gravity vector in body frame)
-        # Get quaternion - use the same values as in base_pose.orientation for consistency
-        qw = self.mj_data.qpos[3]
-        qx = self.mj_data.qpos[4]
-        qy = self.mj_data.qpos[5]
-        qz = self.mj_data.qpos[6]
-
-        # Compute rotation matrix from quaternion
-        R = np.array(
-            [
-                [1 - 2 * (qy**2 + qz**2), 2 * (qx * qy - qw * qz), 2 * (qx * qz + qw * qy)],
-                [2 * (qx * qy + qw * qz), 1 - 2 * (qx**2 + qz**2), 2 * (qy * qz - qw * qx)],
-                [2 * (qx * qz - qw * qy), 2 * (qy * qz + qw * qx), 1 - 2 * (qx**2 + qy**2)],
-            ]
-        )
-
-        # Transform gravity vector from world to body frame
-        # Use normalized gravity vector [0, 0, -1] to match training data
-        gravity_world = np.array([0, 0, -1])
-        gravity_body = R.T @ gravity_world
-
-        msg.projected_gravity = Vector3(x=gravity_body[0], y=gravity_body[1], z=gravity_body[2])
-
-        # Joint states
-        msg.joint_positions = self.mj_data.qpos[7 : 7 + self.num_motor].tolist()
-        msg.joint_velocities = self.mj_data.qvel[6 : 6 + self.num_motor].tolist()
-
-        # Joint torques from actuator forces
-        msg.joint_torques = self.mj_data.actuator_force[: self.num_motor].tolist()
-
-        self.robot_state_pub.publish(msg)
+    def __del__(self):
+        """Cleanup ROS2 resources."""
+        if hasattr(self, "_node") and self._node is not None:
+            self._node.destroy_node()
