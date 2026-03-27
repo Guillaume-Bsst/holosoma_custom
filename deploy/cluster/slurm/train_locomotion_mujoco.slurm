@@ -11,25 +11,26 @@
 #SBATCH -p willow
 #SBATCH -A willow
 
-BASE_DIR="/home/gbesset/WILLOW/holosoma"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRATCH_DIR="${SCRATCH:-${BASE_DIR}}"
 
-cd ${BASE_DIR}
+cd "${BASE_DIR}"
 
 mkdir -p slurm_logs
-mkdir -p ${BASE_DIR}/logs
-mkdir -p ${BASE_DIR}/wandb
+mkdir -p "${BASE_DIR}/logs"
+mkdir -p "${BASE_DIR}/wandb"
 
-export APPTAINER_CACHEDIR="${BASE_DIR}/.apptainer_cache"
-export APPTAINER_TMPDIR="${BASE_DIR}/.apptainer_tmp"
-mkdir -p ${APPTAINER_CACHEDIR} ${APPTAINER_TMPDIR}
+export APPTAINER_CACHEDIR="${SCRATCH_DIR}/.apptainer_cache"
+export APPTAINER_TMPDIR="${SCRATCH_DIR}/.apptainer_tmp"
+mkdir -p "${APPTAINER_CACHEDIR}" "${APPTAINER_TMPDIR}"
 
 apptainer exec --nv --writable-tmpfs \
     --bind /run \
     --bind /dev/shm \
-    --bind ${BASE_DIR}/logs:/workspace/holosoma/logs \
-    --bind ${BASE_DIR}/wandb:/workspace/holosoma/wandb \
-    --bind ${BASE_DIR}/src:/workspace/holosoma/src \
-    ${BASE_DIR}/apptainer/holosoma.sif bash -c "
+    --bind "${BASE_DIR}/logs":/workspace/holosoma/logs \
+    --bind "${BASE_DIR}/wandb":/workspace/holosoma/wandb \
+    --bind "${BASE_DIR}/src":/workspace/holosoma/src \
+    "${BASE_DIR}/deploy/cluster/holosoma.sif" bash -c "
     source /root/.holosoma_deps/miniconda3/etc/profile.d/conda.sh && \
     conda activate hssim && \
     export MUJOCO_GL=egl && \
