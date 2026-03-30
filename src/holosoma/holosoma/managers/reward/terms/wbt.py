@@ -52,15 +52,55 @@ def limits_dof_pos(env: WholeBodyTrackingManager, soft_dof_pos_limit: float = 0.
     Returns:
         Reward tensor [num_envs]
     """
-    # Use soft limits as fraction of hard limits
     m = (env.simulator.hard_dof_pos_limits[:, 0] + env.simulator.hard_dof_pos_limits[:, 1]) / 2  # type: ignore[attr-defined]
     r = env.simulator.hard_dof_pos_limits[:, 1] - env.simulator.hard_dof_pos_limits[:, 0]  # type: ignore[attr-defined]
     lower_soft_limit = m - 0.5 * r * soft_dof_pos_limit
     upper_soft_limit = m + 0.5 * r * soft_dof_pos_limit
 
-    out_of_limits = -(env.simulator.dof_pos - lower_soft_limit).clip(max=0.0)  # lower limit
+    out_of_limits = -(env.simulator.dof_pos - lower_soft_limit).clip(max=0.0)
     out_of_limits += (env.simulator.dof_pos - upper_soft_limit).clip(min=0.0)
     return torch.sum(out_of_limits, dim=1)
+
+
+def limits_dof_pos_target(
+    env: WholeBodyTrackingManager, soft_dof_pos_limit: float = 0.95, alpha: float = 5.0
+) -> torch.Tensor:
+    """Penalize policy q_target commands approaching hard limits with an exponential barrier.
+
+    Applied to the commanded target positions rather than actual dof_pos, so the policy
+    learns to never command out-of-limit positions regardless of whether the simulator
+    enforces them physically (e.g. IsaacSim blocks joints but PyBullet does not).
+
+    Zero below the soft limit, exponentially growing between soft and hard limit.
+    At soft limit: penalty ~ 0. At hard limit: exp(alpha) - 1.
+
+    Args:
+        env: The environment instance
+        soft_dof_pos_limit: Soft limit as fraction of hard limit range (default: 0.95)
+        alpha: Exponential growth rate (default: 5.0)
+
+    Returns:
+        Reward tensor [num_envs]
+    """
+    hard_lower = env.simulator.hard_dof_pos_limits[:, 0]  # type: ignore[attr-defined]
+    hard_upper = env.simulator.hard_dof_pos_limits[:, 1]  # type: ignore[attr-defined]
+    m = (hard_lower + hard_upper) / 2
+    r = hard_upper - hard_lower
+    lower_soft = m - 0.5 * r * soft_dof_pos_limit
+    upper_soft = m + 0.5 * r * soft_dof_pos_limit
+
+    # Normalize excess by the margin between soft and hard limit
+    # 0 at soft limit, 1 at hard limit, >1 beyond
+    upper_margin = (hard_upper - upper_soft).clamp(min=1e-6)
+    lower_margin = (lower_soft - hard_lower).clamp(min=1e-6)
+
+    q_target = env.default_dof_pos + env.action_manager.action * env.action_scales  # type: ignore[attr-defined]
+    upper_excess = ((q_target - upper_soft) / upper_margin).clamp(min=0.0)
+    lower_excess = ((lower_soft - q_target) / lower_margin).clamp(min=0.0)
+
+    penalty = torch.exp(alpha * upper_excess) - 1.0
+    penalty += torch.exp(alpha * lower_excess) - 1.0
+    return torch.sum(penalty, dim=1)
 
 
 #########################################################################################################
