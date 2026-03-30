@@ -47,8 +47,8 @@ if [[ ! -f $SENTINEL_FILE ]]; then
 
   # Create the conda environment
   if [[ ! -d $ENV_ROOT ]]; then
-    $CONDA_ROOT/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
-    $CONDA_ROOT/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+    $CONDA_ROOT/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true
+    $CONDA_ROOT/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true
     $CONDA_ROOT/bin/conda install -y mamba -c conda-forge -n base
     MAMBA_ROOT_PREFIX=$CONDA_ROOT $CONDA_ROOT/bin/mamba create -y -n hsinference python=3.11 \
       -c robostack-staging -c conda-forge --override-channels --channel-priority flexible \
@@ -71,15 +71,14 @@ if [[ ! -f $SENTINEL_FILE ]]; then
     conda install -c conda-forge -y libstdcxx-ng
   fi
 
-  # Install holosoma_inference avec --force-reinstall pour corriger les fuites d'environnement
   # Note: On macOS, only Unitree SDK is supported (Booster SDK is Linux-only)
-  $ENV_ROOT/bin/python -m pip install --force-reinstall -e $ROOT_DIR/src/holosoma_inference[unitree]
+  $ENV_ROOT/bin/python -m pip install -e $ROOT_DIR/src/holosoma_inference[unitree]
 
   # Setup a few things for ARM64 Linux (G1 Jetson)
   if [[ $OS == "Linux" && $ARCH == "aarch64" ]]; then
     # nvpmodel may not be available or may require sudo — ignore failures
     nvpmodel -m 0 2>/dev/null || true
-    $ENV_ROOT/bin/python -m pip install pin>=3.8.0
+    $ENV_ROOT/bin/python -m pip install "pin>=3.8.0"
   else
     if [[ ! -d $WORKSPACE_DIR/unitree_sdk2_python ]]; then
       git clone https://github.com/unitreerobotics/unitree_sdk2_python.git $WORKSPACE_DIR/unitree_sdk2_python

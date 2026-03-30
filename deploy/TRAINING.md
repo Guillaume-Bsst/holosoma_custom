@@ -183,3 +183,9 @@ apptainer exec --nv --writable-tmpfs \
         --simulator.config.mujoco-warp.ccd-iterations=200
 "
 ```
+
+---
+
+## Next step
+
+To evaluate a trained checkpoint and export it to ONNX, see [EVALUATION.md](EVALUATION.md).

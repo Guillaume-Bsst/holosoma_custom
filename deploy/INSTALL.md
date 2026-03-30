@@ -7,6 +7,8 @@ All commands are run from the `holosoma/` directory unless otherwise specified.
 | Use case | Environment | Installation |
 |---|---|---|
 | Retargeting, data conversion | `hsretargeting` | [Local conda](#local-conda-all-use-cases) |
+| Policy evaluation — MJWarp | `hsmujoco` | [Local conda](#local-conda-all-use-cases) |
+| Policy evaluation — IsaacSim | `hssim` | [Local conda](#local-conda-all-use-cases) |
 | Inference on real robot | `hsinference` | [Local conda](#local-conda-all-use-cases) |
 | Sim-to-sim (MuJoCo) | `hsmujoco` | [Local conda](#local-conda-all-use-cases) |
 | Sim-to-sim (PyBullet) | `hsinference` + `unitree_control_interface` | [Local conda](#local-conda-all-use-cases) + [PyBullet bridge](#pybullet-bridge-sim-to-sim) |

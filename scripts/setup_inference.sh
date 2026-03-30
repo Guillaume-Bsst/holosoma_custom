@@ -89,7 +89,7 @@ if [[ ! -f $SENTINEL_FILE ]]; then
   # /opt/rh/gcc-toolset-14/root/usr/include/c++/14/bits/stl_vector.h:1130: ...
   if [[ $OS == "Linux" && $ARCH == "aarch64" ]]; then
     sudo nvpmodel -m 0 2>/dev/null || true
-    pip install pin>=3.8.0
+    pip install "pin>=3.8.0"
   else
     if [[ ! -d $WORKSPACE_DIR/unitree_sdk2_python ]]; then
       git clone https://github.com/unitreerobotics/unitree_sdk2_python.git $WORKSPACE_DIR/unitree_sdk2_python

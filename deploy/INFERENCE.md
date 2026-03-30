@@ -3,6 +3,8 @@
 All commands are run from the `holosoma/` directory with conda (no Apptainer needed).
 See [INSTALL.md](INSTALL.md) for environment setup.
 
+> To obtain an ONNX model from a training checkpoint, see [EVALUATION.md](EVALUATION.md).
+
 ---
 
 ## Real robot inference
@@ -13,7 +15,9 @@ See [INSTALL.md](INSTALL.md) for environment setup.
 source scripts/source_inference_setup.sh
 python src/holosoma_inference/holosoma_inference/run_policy.py \
     inference:g1-29dof-loco \
-    --task.model-path path/to/model.onnx
+    --task.model-path https://wandb.ai/guibsst-inria/WholeBodyTracking/runs/dcpxirww/files/model_16000.onnx \
+    --task.use-sim-time \
+    --task.rl-rate 50
 ```
 
 ### Via ROS2 (real robot)

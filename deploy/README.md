@@ -10,6 +10,7 @@ SLURM job scripts, and usage guides.
 | [INSTALL.md](INSTALL.md) | What to install depending on your use case (local conda or Apptainer) |
 | [RETARGETING.md](RETARGETING.md) | How to run retargeting and data conversion |
 | [TRAINING.md](TRAINING.md) | How to run training jobs (MJWarp, IsaacSim, multi-GPU, with objects) |
+| [EVALUATION.md](EVALUATION.md) | How to evaluate a trained checkpoint and export to ONNX |
 | [INFERENCE.md](INFERENCE.md) | How to run inference on the real robot or in simulation (MuJoCo, PyBullet) |
 
 ## Folder structure
@@ -20,6 +21,7 @@ deploy/
 ├── INSTALL.md                 ← installation guide
 ├── RETARGETING.md             ← retargeting & data conversion guide
 ├── TRAINING.md                ← training guide
+├── EVALUATION.md              ← policy evaluation & ONNX export guide
 ├── INFERENCE.md               ← inference & sim-to-sim guide
 ├── local/
 │   ├── setup_holosoma.sh      ← full local install (no sudo)

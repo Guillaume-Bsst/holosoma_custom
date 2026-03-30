@@ -27,8 +27,8 @@ conda config --set always_yes true
 conda config --set channel_priority strict
 conda config --set ssl_verify false
 
-conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
-conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true
 
 # ── 2. Install base build tools via conda-forge (no sudo needed) ──────────────
 
@@ -68,11 +68,18 @@ export DISTRIB_RELEASE=22.04
 
 # ── 4. Speed up pip installs with uv ─────────────────────────────────────────
 
-python -m pip install uv
+"$CONDA_ROOT/bin/python" -m pip install uv
 
 export UV_BIN="$CONDA_ROOT/bin/uv"
+if [ ! -x "$UV_BIN" ]; then
+    UV_BIN="$(command -v uv 2>/dev/null || echo "")"
+fi
 function pip() {
-    env UV_CONCURRENT_DOWNLOADS=4 UV_CONCURRENT_INSTALLATIONS=4 UV_NO_CACHE=1 "$UV_BIN" pip "$@"
+    if [ -n "$UV_BIN" ] && [ -x "$UV_BIN" ]; then
+        env UV_CONCURRENT_DOWNLOADS=8 UV_CONCURRENT_INSTALLATIONS=8 UV_NO_CACHE=1 "$UV_BIN" pip "$@"
+    else
+        python -m pip "$@"
+    fi
 }
 export -f pip
 
