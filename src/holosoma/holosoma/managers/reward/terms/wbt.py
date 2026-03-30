@@ -67,21 +67,9 @@ def limits_dof_pos_target(
 ) -> torch.Tensor:
     """Penalize policy q_target commands approaching hard limits with a quadratic barrier.
 
-    Applied to the commanded target positions rather than actual dof_pos, so the policy
-    learns to never command out-of-limit positions regardless of whether the simulator
-    enforces them physically (e.g. IsaacSim blocks joints but PyBullet does not).
-
-    This quadratic version provides smoother gradients compared to exponential barriers,
-    preventing gradient explosion during early stages of training.
-    Zero below the soft limit, growing quadratically between soft and hard limit.
-
-    Args:
-        env: The environment instance
-        soft_dof_pos_limit: Soft limit as fraction of hard limit range (default: 0.90)
-        alpha: Quadratic growth rate (default: 2.0)
-
-    Returns:
-        Reward tensor [num_envs]
+    Unlike actual dof_pos which is bounded by the physics engine, q_target is unbounded.
+    A quadratic penalty creates a strong barrier in the action space, preventing the 
+    agent from commanding extreme targets to exploit the PD controller's max torque.
     """
     hard_lower = env.simulator.hard_dof_pos_limits[:, 0]  # type: ignore[attr-defined]
     hard_upper = env.simulator.hard_dof_pos_limits[:, 1]  # type: ignore[attr-defined]
@@ -90,17 +78,15 @@ def limits_dof_pos_target(
     lower_soft = m - 0.5 * r * soft_dof_pos_limit
     upper_soft = m + 0.5 * r * soft_dof_pos_limit
 
-    # Normalize excess by the margin between soft and hard limit
-    # 0 at soft limit, 1 at hard limit, >1 beyond
     upper_margin = (hard_upper - upper_soft).clamp(min=1e-6)
     lower_margin = (lower_soft - hard_lower).clamp(min=1e-6)
 
     q_target = env.default_dof_pos + env.action_manager.action * env.action_scales  # type: ignore[attr-defined]
-    upper_excess = ((q_target - upper_soft) / upper_margin).clamp(min=0.0)
-    lower_excess = ((lower_soft - q_target) / lower_margin).clamp(min=0.0)
+    
+    # Le max=1.5 est vital pour les premiers steps (empêche les NaN quand l'Actor est aléatoire)
+    upper_excess = ((q_target - upper_soft) / upper_margin).clamp(min=0.0, max=1.5)
+    lower_excess = ((lower_soft - q_target) / lower_margin).clamp(min=0.0, max=1.5)
 
-    # Quadratic penalty: (alpha * excess)^2
-    # Stable for PPO as gradients are linear with respect to the excess
     penalty = torch.square(alpha * upper_excess)
     penalty += torch.square(alpha * lower_excess)
     
