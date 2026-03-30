@@ -83,36 +83,21 @@ ROS2 topics used:
 > [inria-paris-robotics-lab/unitree_control_interface](https://github.com/inria-paris-robotics-lab/unitree_control_interface).
 > Follow the installation instructions in that repository. The workspace ends up at
 > `unitree_ros2/cyclonedds_ws/` alongside `holosoma/`.
-> Terminals 1–3 are run from `unitree_ros2/cyclonedds_ws/` with its conda environment active.
 
-**Terminal 1 — PyBullet simulation** (from `unitree_ros2/cyclonedds_ws/`):
+### Manual launch (5 terminals)
 
-```bash
-mamba activate unitree_control_interface
-source install/setup.bash
-source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION)
-ros2 launch unitree_simulation launch_sim.launch.py robot:=g1
-```
+Terminals 1, 3, 4, 5 are run from `unitree_ros2/cyclonedds_ws/`; terminal 2 from `holosoma/`.
 
-**Terminal 2 — Watchdog** (from `unitree_ros2/cyclonedds_ws/`):
+**Terminal 1 — PyBullet simulation**:
 
 ```bash
 mamba activate unitree_control_interface
 source install/setup.bash
 source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION)
-ros2 launch unitree_control_interface watchdog.launch.py robot_type:=g1
+ros2 launch unitree_simulation launch_sim.launch.py robot:=g1 unlock_base:=False
 ```
 
-**Terminal 3 — Bridge** (from `holosoma/`):
-
-```bash
-mamba activate unitree_control_interface
-source ../unitree_ros2/cyclonedds_ws/install/setup.bash
-source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION)
-python src/holosoma_inference/holosoma_inference/unitree_pybullet_bridge.py
-```
-
-**Terminal 4 — Policy** (from `holosoma/`):
+**Terminal 2 — Policy** *(run from `holosoma/`)*:
 
 ```bash
 source scripts/source_inference_setup.sh
@@ -125,3 +110,36 @@ python src/holosoma_inference/holosoma_inference/run_policy.py \
     --task.use-sim-time \
     --task.rl-rate 50
 ```
+
+> **Once the policy is running, immediately press `ENTER` then `]` to activate the policy.**
+
+**Terminal 3 — Watchdog**:
+
+```bash
+mamba activate unitree_control_interface
+source install/setup.bash
+source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION)
+ros2 launch unitree_control_interface watchdog.launch.py robot_type:=g1
+```
+
+**Terminal 4 — Bridge** *(run from `holosoma/`)*:
+
+```bash
+mamba activate unitree_control_interface
+source ../unitree_ros2/cyclonedds_ws/install/setup.bash
+source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION)
+python src/holosoma_inference/holosoma_inference/unitree_pybullet_bridge.py
+```
+
+The bridge will automatically move the robot to the standing configuration (~5 s), then hand control over to the policy.
+
+**Terminal 5 — Unlock base** *(once the bridge is ready)*:
+
+```bash
+mamba activate unitree_control_interface
+source ../unitree_ros2/cyclonedds_ws/install/setup.bash
+source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION)
+ros2 topic pub --once /unlock_base std_msgs/msg/Empty {}
+```
+
+Then press `s` in the policy terminal to start the motion clip.

@@ -50,11 +50,36 @@ from rclpy.node import Node
 from sensor_msgs.msg import Imu, JointState
 from unitree_hg.msg import LowState
 
+try:
+    import zmq
+except ImportError:
+    import subprocess
+    import sys
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyzmq"])
+    import zmq
+
 from unitree_control_interface_py import G1ControlInterface
 
 # ── Joint dimension constants ──────────────────────────────────────────────────
 N_UNITREE  = 27   # G1ControlInterface actuated DOF (waist_roll + waist_pitch are locked)
 N_HOLOSOMA = 29   # holosoma g1-29dof config DOF
+
+# Joint limits in 27-DOF unitree order (from g1_default_limits.yaml) — for logging only.
+_Q_MIN = np.array([-2.5307,-0.5236,-2.7576,-0.087267,-0.88,-0.2618,
+                   -2.5307,-2.9671,-2.7576,-0.087267,-0.88,-0.2618,
+                   -2.618,-3.0892,-1.5882,-2.618,-1.0472,-1.972222054,-1.614429558,-1.614429558,
+                   -3.0892,-2.2515,-2.618,-1.0472,-1.972222054,-1.614429558,-1.614429558])
+_Q_MAX = np.array([2.8798,2.9671,2.7576,2.8798,0.53,0.2618,
+                   2.8798,0.5236,2.7576,2.8798,0.53,0.2618,
+                   2.618,2.6704,2.2515,2.618,2.0944,1.972222054,1.614429558,1.614429558,
+                   2.6704,1.5882,2.618,2.0944,1.972222054,1.614429558,1.614429558])
+_JOINT_NAMES_27 = [
+    "left_hip_pitch","left_hip_roll","left_hip_yaw","left_knee","left_ankle_pitch","left_ankle_roll",
+    "right_hip_pitch","right_hip_roll","right_hip_yaw","right_knee","right_ankle_pitch","right_ankle_roll",
+    "waist_yaw",
+    "left_shoulder_pitch","left_shoulder_roll","left_shoulder_yaw","left_elbow","left_wrist_roll","left_wrist_pitch","left_wrist_yaw",
+    "right_shoulder_pitch","right_shoulder_roll","right_shoulder_yaw","right_elbow","right_wrist_roll","right_wrist_pitch","right_wrist_yaw",
+]
 
 # G1 standing configuration in G1ControlInterface URDF order (27 values).
 # From unitree_simulation G1Configuration: hip_pitch=-0.5, knee=1.0, ankle_pitch=-0.5
@@ -140,6 +165,11 @@ class UnitreePybulletBridgeNode(Node):
         self._robot_if.register_callback(self._joint_state_cb)
         self._unlocked = False
 
+        # ── ZMQ clock publisher — feeds sim time to WBT policy ───────────────
+        self._zmq_context = zmq.Context()
+        self._zmq_clock_socket = self._zmq_context.socket(zmq.PUB)
+        self._zmq_clock_socket.bind("tcp://*:5555")
+
         self._robot_if.start_async(_G1_STAND_Q)
         logger.info("Bridge started — moving to standing config, waiting for watchdog...")
 
@@ -147,6 +177,16 @@ class UnitreePybulletBridgeNode(Node):
 
     def _joint_state_cb(self, t: float, q, dq, ddq):
         """Receive joint state (27 DOF, URDF order); publish to holosoma and forward commands."""
+        try:
+            self._zmq_clock_socket.send_string(str(int(t * 1000)), zmq.NOBLOCK)
+        except zmq.Again:
+            pass
+
+        # Log actual joint positions that exceed watchdog limits
+        for i, (q_i, qmin, qmax, name) in enumerate(zip(q, _Q_MIN, _Q_MAX, _JOINT_NAMES_27)):
+            if q_i < qmin or q_i > qmax:
+                logger.warning(f"Actual q out of limits: {name}[{i}] = {q_i:.4f} (limits [{qmin:.4f}, {qmax:.4f}])")
+
         q_np  = np.asarray(q)
         dq_np = np.asarray(dq)
 
@@ -222,6 +262,11 @@ class UnitreePybulletBridgeNode(Node):
             n = min(len(msg.position), N_HOLOSOMA)
             h_q[:n] = msg.position[:n]
             self._cmd_q = _holosoma_to_unitree(h_q)
+
+            # Log any q_target that exceeds watchdog limits
+            for i, (q, qmin, qmax, name) in enumerate(zip(self._cmd_q, _Q_MIN, _Q_MAX, _JOINT_NAMES_27)):
+                if q < qmin or q > qmax:
+                    logger.warning(f"Policy q_target out of limits: {name}[{i}] = {q:.4f} (limits [{qmin:.4f}, {qmax:.4f}])")
 
             if msg.velocity:
                 h_dq = np.zeros(N_HOLOSOMA)
