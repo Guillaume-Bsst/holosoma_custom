@@ -63,21 +63,22 @@ def limits_dof_pos(env: WholeBodyTrackingManager, soft_dof_pos_limit: float = 0.
 
 
 def limits_dof_pos_target(
-    env: WholeBodyTrackingManager, soft_dof_pos_limit: float = 0.95, alpha: float = 5.0
+    env: WholeBodyTrackingManager, soft_dof_pos_limit: float = 0.90, alpha: float = 2.0
 ) -> torch.Tensor:
-    """Penalize policy q_target commands approaching hard limits with an exponential barrier.
+    """Penalize policy q_target commands approaching hard limits with a quadratic barrier.
 
     Applied to the commanded target positions rather than actual dof_pos, so the policy
     learns to never command out-of-limit positions regardless of whether the simulator
     enforces them physically (e.g. IsaacSim blocks joints but PyBullet does not).
 
-    Zero below the soft limit, exponentially growing between soft and hard limit.
-    At soft limit: penalty ~ 0. At hard limit: exp(alpha) - 1.
+    This quadratic version provides smoother gradients compared to exponential barriers,
+    preventing gradient explosion during early stages of training.
+    Zero below the soft limit, growing quadratically between soft and hard limit.
 
     Args:
         env: The environment instance
-        soft_dof_pos_limit: Soft limit as fraction of hard limit range (default: 0.95)
-        alpha: Exponential growth rate (default: 5.0)
+        soft_dof_pos_limit: Soft limit as fraction of hard limit range (default: 0.90)
+        alpha: Quadratic growth rate (default: 2.0)
 
     Returns:
         Reward tensor [num_envs]
@@ -98,10 +99,12 @@ def limits_dof_pos_target(
     upper_excess = ((q_target - upper_soft) / upper_margin).clamp(min=0.0)
     lower_excess = ((lower_soft - q_target) / lower_margin).clamp(min=0.0)
 
-    penalty = torch.exp(alpha * upper_excess) - 1.0
-    penalty += torch.exp(alpha * lower_excess) - 1.0
+    # Quadratic penalty: (alpha * excess)^2
+    # Stable for PPO as gradients are linear with respect to the excess
+    penalty = torch.square(alpha * upper_excess)
+    penalty += torch.square(alpha * lower_excess)
+    
     return torch.sum(penalty, dim=1)
-
 
 #########################################################################################################
 ## terms specific to Whole Body Tracking

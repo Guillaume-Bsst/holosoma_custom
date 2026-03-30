@@ -11,7 +11,7 @@
 #SBATCH -p willow
 #SBATCH -A willow
 
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+BASE_DIR="$(cd "$SLURM_SUBMIT_DIR/../../.." && pwd)"
 SCRATCH_DIR="${SCRATCH:-${BASE_DIR}}"
 
 cd "${BASE_DIR}"

@@ -11,7 +11,7 @@
 #SBATCH -p willow
 #SBATCH -A willow
 
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+BASE_DIR="$(cd "$SLURM_SUBMIT_DIR/../../.." && pwd)"
 SIF_FILE="${BASE_DIR}/deploy/cluster/holosoma.sif"
 
 cd "${BASE_DIR}"
