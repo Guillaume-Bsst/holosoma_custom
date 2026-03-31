@@ -17,28 +17,6 @@ Joint mapping (G1 27-DOF ↔ 29-DOF):
   0.0 (fixed)    ↔  holosoma[13]     waist_roll  (locked in mode_machine=6)
   0.0 (fixed)    ↔  holosoma[14]     waist_pitch (locked in mode_machine=6)
   unitree[13:27] ↔  holosoma[15:29]  left arm + right arm
-
-Launch sequence (4 terminals):
-
-  # 1 — Simulation (PyBullet)
-  mamba activate unitree_control_interface
-  source install/setup.bash
-  source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION)
-  ros2 launch unitree_simulation launch_sim.launch.py robot:=g1
-
-  # 2 — Watchdog
-  ros2 launch unitree_control_interface watchdog.launch.py robot_type:=g1
-
-  # 3 — This bridge
-  python src/holosoma_inference/holosoma_inference/unitree_pybullet_bridge.py
-
-  # 4 — holosoma policy
-  python src/holosoma_inference/holosoma_inference/run_policy.py \\
-      inference:g1-29dof-wbt \\
-      --robot.sdk-type=ros2 \\
-      --task.model-path <model.onnx> \\
-      --task.use-sim-time \\
-      --task.rl-rate 50
 """
 
 import threading
