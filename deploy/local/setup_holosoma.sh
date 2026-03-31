@@ -27,6 +27,10 @@ conda config --set always_yes true
 conda config --set channel_priority strict
 conda config --set ssl_verify false
 
+# Remove Anaconda cloud plugins shipped with recent Miniconda — they pull pydantic
+# as a dependency and break conda entry points in sub-environments.
+conda remove -n base --force anaconda-auth conda-anaconda-tos 2>/dev/null || true
+
 conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true
 conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true
 

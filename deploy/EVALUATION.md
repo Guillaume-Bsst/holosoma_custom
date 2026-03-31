@@ -107,8 +107,7 @@ python src/holosoma/holosoma/eval_agent.py \
 
 ```bash
 source scripts/source_mujoco_setup.sh
-export MUJOCO_GL=egl
-xvfb-run -a python src/holosoma/holosoma/eval_agent.py \
+python src/holosoma/holosoma/eval_agent.py \
     --checkpoint wandb://<entity>/<project>/<run_id>/model_5000.pt \
     --training.export-onnx=True
 ```
@@ -117,7 +116,7 @@ xvfb-run -a python src/holosoma/holosoma/eval_agent.py \
 
 ```bash
 source scripts/source_isaacsim_setup.sh
-xvfb-run -a python src/holosoma/holosoma/eval_agent.py \
+python src/holosoma/holosoma/eval_agent.py \
     --checkpoint wandb://<entity>/<project>/<run_id>/model_5000.pt \
     --training.export-onnx=True
 ```
