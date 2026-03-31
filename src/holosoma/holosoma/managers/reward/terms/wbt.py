@@ -63,13 +63,14 @@ def limits_dof_pos(env: WholeBodyTrackingManager, soft_dof_pos_limit: float = 0.
 
 
 def limits_dof_pos_target(
-    env: WholeBodyTrackingManager, soft_dof_pos_limit: float = 0.90, alpha: float = 2.0
+    env: WholeBodyTrackingManager, soft_dof_pos_limit: float = 0.90
 ) -> torch.Tensor:
-    """Penalize policy q_target commands approaching hard limits with a quadratic barrier.
+    """Penalize policy q_target commands approaching hard limits with a quartic barrier.
 
     Unlike actual dof_pos which is bounded by the physics engine, q_target is unbounded.
-    A quadratic penalty creates a strong barrier in the action space, preventing the 
-    agent from commanding extreme targets to exploit the PD controller's max torque.
+    A quartic (power-4) penalty stays near zero in most of the soft-to-hard zone but
+    rises steeply close to the hard limit, allowing the robot to use its full joint
+    range without being pushed to exploit other contacts.
     """
     hard_lower = env.simulator.hard_dof_pos_limits[:, 0]  # type: ignore[attr-defined]
     hard_upper = env.simulator.hard_dof_pos_limits[:, 1]  # type: ignore[attr-defined]
@@ -82,14 +83,12 @@ def limits_dof_pos_target(
     lower_margin = (lower_soft - hard_lower).clamp(min=1e-6)
 
     q_target = env.default_dof_pos + env.action_manager.action * env.action_scales  # type: ignore[attr-defined]
-    
-    # Le max=1.5 est vital pour les premiers steps (empêche les NaN quand l'Actor est aléatoire)
+
     upper_excess = ((q_target - upper_soft) / upper_margin).clamp(min=0.0, max=1.5)
     lower_excess = ((lower_soft - q_target) / lower_margin).clamp(min=0.0, max=1.5)
 
-    penalty = torch.square(alpha * upper_excess)
-    penalty += torch.square(alpha * lower_excess)
-    
+    penalty = torch.pow(upper_excess, 4) + torch.pow(lower_excess, 4)
+
     return torch.sum(penalty, dim=1)
 
 #########################################################################################################
