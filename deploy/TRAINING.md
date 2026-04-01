@@ -7,6 +7,29 @@ For SLURM jobs, use the pre-configured scripts in `deploy/cluster/slurm/`.
 
 ---
 
+## G1 variants: 27-DOF (base) vs 29-DOF (pro)
+
+The G1 robot comes in two variants:
+
+| Variant | DOF | Difference |
+|---------|-----|------------|
+| **G1 base** (`g1_27dof`) | 27 | `waist_roll` and `waist_pitch` joints are locked |
+| **G1 pro** (`g1_29dof`) | 29 | All waist joints are actuated |
+
+All training commands below default to the **29-DOF pro** variant.
+To train with the **27-DOF base** variant instead, replace `g1-29dof` by `g1-27dof` in the experiment name:
+
+```
+exp:g1-29dof-wbt-isaacsim   →   exp:g1-27dof-wbt-isaacsim
+exp:g1-29dof-wbt-mjwarp     →   exp:g1-27dof-wbt-mjwarp
+exp:g1-29dof-wbt-fast-sac   →   exp:g1-27dof-wbt-fast-sac
+```
+
+The 27-DOF configs reuse the same motion data, reward, observation, and randomization
+settings — only the robot model (URDF/XML) and joint configuration differ.
+
+---
+
 ## Locomotion (MJWarp)
 
 ```bash

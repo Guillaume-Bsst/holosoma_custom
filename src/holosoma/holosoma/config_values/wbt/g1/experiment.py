@@ -206,6 +206,49 @@ g1_29dof_wbt_fast_sac_w_object = replace(
     ),
 )
 
+# ── G1 base 27-DOF variants (waist_roll + waist_pitch locked) ────────────────
+
+g1_27dof_wbt_isaacsim = replace(
+    g1_29dof_wbt_isaacsim,
+    training=replace(g1_29dof_wbt_isaacsim.training, name="g1_27dof_wbt_manager"),
+    robot=replace(
+        robot.g1_27dof,
+        control=replace(robot.g1_27dof.control, action_scale=1.0),
+        asset=replace(robot.g1_27dof.asset, enable_self_collisions=True),
+        init_state=replace(robot.g1_27dof.init_state, pos=[0.0, 0.0, 0.76]),
+    ),
+    command=command.g1_27dof_wbt_command,
+    termination=termination.g1_27dof_wbt_termination,
+)
+
+g1_27dof_wbt_fast_sac = replace(
+    g1_29dof_wbt_fast_sac,
+    training=replace(g1_29dof_wbt_fast_sac.training, name="g1_27dof_wbt_fast_sac_manager"),
+    robot=replace(
+        robot.g1_27dof,
+        control=replace(robot.g1_27dof.control, action_scale=1.0),
+        asset=replace(robot.g1_27dof.asset, enable_self_collisions=True),
+        init_state=replace(robot.g1_27dof.init_state, pos=[0.0, 0.0, 0.76]),
+    ),
+    command=command.g1_27dof_wbt_command,
+    termination=termination.g1_27dof_wbt_termination,
+)
+
+g1_27dof_wbt_mjwarp = replace(
+    g1_27dof_wbt_isaacsim,
+    randomization=randomization.g1_29dof_wbt_randomization_mjwarp,
+    simulator=replace(
+        simulator.mjwarp,
+        config=replace(
+            simulator.mjwarp.config,
+            sim=replace(
+                simulator.mjwarp.config.sim,
+                max_episode_length_s=10.0,
+            ),
+        ),
+    ),
+)
+
 __all__ = [
     "g1_29dof_wbt_isaacsim",
     "g1_29dof_wbt_isaacsim_w_object",
@@ -213,26 +256,37 @@ __all__ = [
     "g1_29dof_wbt_mjwarp_w_object",
     "g1_29dof_wbt_fast_sac",
     "g1_29dof_wbt_fast_sac_w_object",
+    "g1_27dof_wbt_isaacsim",
+    "g1_27dof_wbt_fast_sac",
+    "g1_27dof_wbt_mjwarp",
 ]
 
 """
-Example 1: Robot only (IsaacSim):
+Example 1: Robot only, 29-DOF pro (IsaacSim):
 python src/holosoma/holosoma/train_agent.py \
     exp:g1-29dof-wbt-isaacsim
 
-Example 2: Robot only (MJWarp):
+Example 2: Robot only, 27-DOF base (IsaacSim):
+python src/holosoma/holosoma/train_agent.py \
+    exp:g1-27dof-wbt-isaacsim
+
+Example 3: Robot only, 27-DOF base (MJWarp):
+python src/holosoma/holosoma/train_agent.py \
+    exp:g1-27dof-wbt-mjwarp
+
+Example 4: Robot only (MJWarp):
 python src/holosoma/holosoma/train_agent.py \
     exp:g1-29dof-wbt-mjwarp
 
-Example 3: Robot+Object (IsaacSim):
+Example 5: Robot+Object (IsaacSim):
 python src/holosoma/holosoma/train_agent.py \
     exp:g1-29dof-wbt-isaacsim-w-object
 
-Example 4: Robot+Object (MJWarp):
+Example 6: Robot+Object (MJWarp):
 python src/holosoma/holosoma/train_agent.py \
     exp:g1-29dof-wbt-mjwarp-w-object
 
-Example 5: Robot+Terrain (IsaacSim):
+Example 7: Robot+Terrain (IsaacSim):
 python src/holosoma/holosoma/train_agent.py \
     exp:g1-29dof-wbt-isaacsim \
     terrain:terrain-load-obj \

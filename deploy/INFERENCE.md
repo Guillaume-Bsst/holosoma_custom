@@ -133,6 +133,14 @@ python src/holosoma_inference/holosoma_inference/unitree_pybullet_bridge.py
 
 The bridge will automatically move the robot to the standing configuration (~5 s), then hand control over to the policy.
 
+> **27-DOF / 29-DOF auto-detection:** The bridge automatically detects whether the
+> connected policy outputs 27 DOF (G1 base) or 29 DOF (G1 pro) from the first
+> `/holosoma/low_cmd` message. When a 29-DOF policy is detected, `waist_roll` and
+> `waist_pitch` commands are dropped before forwarding to the hardware (which only
+> has 27 actuated joints). When a 27-DOF policy is detected, commands are passed
+> through directly. The detected mode is logged at startup:
+> `Policy DOF auto-detected: 27 (G1 base 27-DOF)` or `29 (G1 pro 29-DOF)`.
+
 **Terminal 5 — Unlock base** *(once the bridge is ready)*:
 
 ```bash

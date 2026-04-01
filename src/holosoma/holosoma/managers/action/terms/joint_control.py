@@ -168,16 +168,9 @@ class JointPositionActionTerm(ActionTermBase):
         control_type = self.env.robot_config.control.control_type
 
         if control_type == "P":
-            # Clamp q_target to hard joint limits
-            q_target = actions_scaled + self.env.default_dof_pos
-            if hasattr(self.env.simulator, "hard_dof_pos_limits"):
-                q_target = q_target.clamp(
-                    min=self.env.simulator.hard_dof_pos_limits[:, 0],
-                    max=self.env.simulator.hard_dof_pos_limits[:, 1],
-                )
             # Position control
             torques = (
-                self._kp_scale * self.p_gains * (q_target - self.env.simulator.dof_pos)
+                self._kp_scale * self.p_gains * (actions_scaled + self.env.default_dof_pos - self.env.simulator.dof_pos)
                 - self._kd_scale * self.d_gains * self.env.simulator.dof_vel
             )
         elif control_type == "V":

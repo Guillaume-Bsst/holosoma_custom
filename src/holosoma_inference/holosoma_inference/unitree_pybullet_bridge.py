@@ -2,7 +2,7 @@
 """Bridge node: unitree_simulation (PyBullet) ↔ holosoma inference policy via ROS2.
 
 Translates between the unitree_control_interface (27 actuated DOF) and
-the holosoma g1-29dof policy format (29 DOF), bridging these ROS2 topics:
+the holosoma policy format (27 or 29 DOF), bridging these ROS2 topics:
 
   Simulation → Bridge → holosoma policy:
     /lowstate  ──►  /holosoma/low_state  (sensor_msgs/JointState)  joint pos & vel
@@ -12,7 +12,12 @@ the holosoma g1-29dof policy format (29 DOF), bridging these ROS2 topics:
     /holosoma/low_cmd   ──►  /lowcmd  (via G1ControlInterface)
     /holosoma/pd_gains  ──►  /lowcmd  (via G1ControlInterface)
 
-Joint mapping (G1 27-DOF ↔ 29-DOF):
+The bridge auto-detects the policy DOF mode from the first /holosoma/low_cmd
+message:
+  - 27 DOF (G1 base): direct pass-through, no conversion needed.
+  - 29 DOF (G1 pro):  waist_roll (idx 13) and waist_pitch (idx 14) are dropped.
+
+Joint mapping (G1 27-DOF hardware ↔ 29-DOF policy):
   unitree[0:13]  ↔  holosoma[0:13]   left leg + right leg + waist_yaw
   0.0 (fixed)    ↔  holosoma[13]     waist_roll  (locked in mode_machine=6)
   0.0 (fixed)    ↔  holosoma[14]     waist_pitch (locked in mode_machine=6)
@@ -70,8 +75,14 @@ _G1_STAND_Q = [
 ]
 
 
-def _unitree_to_holosoma(arr: np.ndarray) -> np.ndarray:
-    """Expand 27-DOF unitree array → 29-DOF holosoma (insert zeros for locked waist joints)."""
+def _unitree_to_holosoma(arr: np.ndarray, n_policy: int) -> np.ndarray:
+    """Expand 27-DOF unitree array → policy DOF format.
+
+    If *n_policy* is 27 the array is returned as-is.
+    If *n_policy* is 29 zeros are inserted for locked waist joints.
+    """
+    if n_policy == N_UNITREE:
+        return arr.copy()
     out = np.zeros(N_HOLOSOMA)
     out[:13] = arr[:13]   # left leg + right leg + waist_yaw
     # out[13] = 0.0        # waist_roll  (locked, stays 0)
@@ -80,8 +91,14 @@ def _unitree_to_holosoma(arr: np.ndarray) -> np.ndarray:
     return out
 
 
-def _holosoma_to_unitree(arr: np.ndarray) -> np.ndarray:
-    """Contract 29-DOF holosoma array → 27-DOF unitree (drop locked waist joints at idx 13-14)."""
+def _holosoma_to_unitree(arr: np.ndarray, n_policy: int) -> np.ndarray:
+    """Contract policy DOF array → 27-DOF unitree.
+
+    If *n_policy* is 27 the array is returned as-is.
+    If *n_policy* is 29, waist_roll (idx 13) and waist_pitch (idx 14) are dropped.
+    """
+    if n_policy == N_UNITREE:
+        return arr.copy()
     out = np.zeros(N_UNITREE)
     out[:13] = arr[:13]   # left leg + right leg + waist_yaw
     out[13:] = arr[15:]   # left arm + right arm (skip indices 13 and 14)
@@ -98,7 +115,7 @@ class UnitreePybulletBridgeNode(Node):
     """
 
     # holosoma G1 joint names in 29-DOF order (with _joint suffix used by holosoma configs)
-    _JOINT_NAMES = [
+    _JOINT_NAMES_29 = [
         "left_hip_pitch_joint",       "left_hip_roll_joint",       "left_hip_yaw_joint",
         "left_knee_joint",            "left_ankle_pitch_joint",    "left_ankle_roll_joint",
         "right_hip_pitch_joint",      "right_hip_roll_joint",      "right_hip_yaw_joint",
@@ -110,6 +127,10 @@ class UnitreePybulletBridgeNode(Node):
         "right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint",
         "right_elbow_joint",          "right_wrist_roll_joint",    "right_wrist_pitch_joint",
         "right_wrist_yaw_joint",
+    ]
+    # holosoma G1 joint names in 27-DOF order (waist_roll + waist_pitch removed)
+    _JOINT_NAMES_27 = [
+        n for n in _JOINT_NAMES_29 if n not in ("waist_roll_joint", "waist_pitch_joint")
     ]
 
     def __init__(self):
@@ -134,6 +155,7 @@ class UnitreePybulletBridgeNode(Node):
         self._kp           = np.full(N_UNITREE, 75.0) # G1 default stiffness
         self._kd           = np.full(N_UNITREE,  1.0) # G1 default damping
         self._cmd_received = False
+        self._n_policy: int = 0  # auto-detected from first /holosoma/low_cmd message
 
         self.create_subscription(JointState, "/holosoma/low_cmd",  self._low_cmd_cb,  10)
         self.create_subscription(JointState, "/holosoma/pd_gains", self._pd_gains_cb, 10)
@@ -177,14 +199,15 @@ class UnitreePybulletBridgeNode(Node):
                 "Waiting for policy commands on /holosoma/low_cmd ..."
             )
 
-        # Publish joint state to holosoma (expand 27 → 29 DOF)
+        # Publish joint state to holosoma (expand to policy DOF if needed)
+        n_pol = self._n_policy if self._n_policy else N_HOLOSOMA  # default 29 before detection
         now = self.get_clock().now().to_msg()
 
         state_msg = JointState()
         state_msg.header.stamp = now
-        state_msg.name         = self._JOINT_NAMES
-        state_msg.position     = _unitree_to_holosoma(q_np).tolist()
-        state_msg.velocity     = _unitree_to_holosoma(dq_np).tolist()
+        state_msg.name         = self._JOINT_NAMES_27 if n_pol == N_UNITREE else self._JOINT_NAMES_29
+        state_msg.position     = _unitree_to_holosoma(q_np, n_pol).tolist()
+        state_msg.velocity     = _unitree_to_holosoma(dq_np, n_pol).tolist()
         self._state_pub.publish(state_msg)
 
         # Publish IMU data (latest values from _lowstate_imu_cb)
@@ -233,13 +256,29 @@ class UnitreePybulletBridgeNode(Node):
 
     # ── holosoma policy callbacks ─────────────────────────────────────────────
 
+    def _detect_policy_dof(self, n_values: int) -> int:
+        """Auto-detect policy DOF from the first message and log it once."""
+        if self._n_policy:
+            return self._n_policy
+        if n_values <= N_UNITREE:
+            self._n_policy = N_UNITREE
+        else:
+            self._n_policy = N_HOLOSOMA
+        logger.info(
+            f"Policy DOF auto-detected: {self._n_policy} "
+            f"({'G1 base 27-DOF' if self._n_policy == N_UNITREE else 'G1 pro 29-DOF'})"
+        )
+        return self._n_policy
+
     def _low_cmd_cb(self, msg: JointState):
-        """Receive joint commands from holosoma policy (29 DOF) and map to 27 DOF."""
+        """Receive joint commands from holosoma policy (27 or 29 DOF) and map to 27 DOF."""
         with self._cmd_lock:
-            h_q = np.zeros(N_HOLOSOMA)
-            n = min(len(msg.position), N_HOLOSOMA)
+            n_pol = self._detect_policy_dof(len(msg.position))
+
+            h_q = np.zeros(n_pol)
+            n = min(len(msg.position), n_pol)
             h_q[:n] = msg.position[:n]
-            self._cmd_q = _holosoma_to_unitree(h_q)
+            self._cmd_q = _holosoma_to_unitree(h_q, n_pol)
 
             # Log any q_target that exceeds watchdog limits
             for i, (q, qmin, qmax, name) in enumerate(zip(self._cmd_q, _Q_MIN, _Q_MAX, _JOINT_NAMES_27)):
@@ -247,32 +286,33 @@ class UnitreePybulletBridgeNode(Node):
                     logger.warning(f"Policy q_target out of limits: {name}[{i}] = {q:.4f} (limits [{qmin:.4f}, {qmax:.4f}])")
 
             if msg.velocity:
-                h_dq = np.zeros(N_HOLOSOMA)
-                nv = min(len(msg.velocity), N_HOLOSOMA)
+                h_dq = np.zeros(n_pol)
+                nv = min(len(msg.velocity), n_pol)
                 h_dq[:nv] = msg.velocity[:nv]
-                self._cmd_dq = _holosoma_to_unitree(h_dq)
+                self._cmd_dq = _holosoma_to_unitree(h_dq, n_pol)
 
             if msg.effort:
-                h_tau = np.zeros(N_HOLOSOMA)
-                nt = min(len(msg.effort), N_HOLOSOMA)
+                h_tau = np.zeros(n_pol)
+                nt = min(len(msg.effort), n_pol)
                 h_tau[:nt] = msg.effort[:nt]
-                self._cmd_tau = _holosoma_to_unitree(h_tau)
+                self._cmd_tau = _holosoma_to_unitree(h_tau, n_pol)
 
             self._cmd_received = True
 
     def _pd_gains_cb(self, msg: JointState):
-        """Receive PD gains from holosoma policy (29 DOF) and map to 27 DOF."""
+        """Receive PD gains from holosoma policy (27 or 29 DOF) and map to 27 DOF."""
         with self._cmd_lock:
+            n_pol = self._n_policy if self._n_policy else N_HOLOSOMA
             if msg.position:
-                h_kp = np.full(N_HOLOSOMA, 75.0)
-                n = min(len(msg.position), N_HOLOSOMA)
+                h_kp = np.full(n_pol, 75.0)
+                n = min(len(msg.position), n_pol)
                 h_kp[:n] = msg.position[:n]
-                self._kp = _holosoma_to_unitree(h_kp)
+                self._kp = _holosoma_to_unitree(h_kp, n_pol)
             if msg.velocity:
-                h_kd = np.full(N_HOLOSOMA, 1.0)
-                nv = min(len(msg.velocity), N_HOLOSOMA)
+                h_kd = np.full(n_pol, 1.0)
+                nv = min(len(msg.velocity), n_pol)
                 h_kd[:nv] = msg.velocity[:nv]
-                self._kd = _holosoma_to_unitree(h_kd)
+                self._kd = _holosoma_to_unitree(h_kd, n_pol)
 
 
 def main():

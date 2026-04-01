@@ -53,7 +53,7 @@ apptainer exec --nv \
     export WANDB_INSECURE_DISABLE_SSL=true && \
     cd /workspace/holosoma && \
     xvfb-run -a python src/holosoma/holosoma/train_agent.py \
-        exp:g1-29dof-wbt-isaacsim \
+        exp:g1-27dof-wbt-isaacsim \
         logger:wandb \
         --logger.video.enabled=False \
         --training.num-envs=8192 \
