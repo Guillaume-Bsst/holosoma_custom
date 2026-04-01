@@ -15,11 +15,8 @@ from holosoma.config_values import (
     terrain,
 )
 
-t1_29dof = ExperimentConfig(
+_SHARED = dict(
     env_class="holosoma.envs.locomotion.locomotion_manager.LeggedRobotLocomotionManager",
-    training=TrainingConfig(project="hv-t1-manager", name="t1_29dof_manager"),
-    algo=replace(algo.ppo, config=replace(algo.ppo.config, num_learning_iterations=25000, use_symmetry=True)),
-    simulator=simulator.isaacgym,
     robot=robot.t1_29dof_waist_wrist,
     terrain=terrain.terrain_locomotion_mix,
     observation=observation.t1_29dof_loco_single_wolinvel,
@@ -27,34 +24,77 @@ t1_29dof = ExperimentConfig(
     termination=termination.t1_29dof_termination,
     randomization=randomization.t1_29dof_randomization,
     command=command.t1_29dof_command,
-    curriculum=curriculum.t1_29dof_curriculum,
-    reward=reward.t1_29dof_loco,
-    nightly=NightlyConfig(
-        iterations=10000,
-        metrics={"Episode/rew_tracking_ang_vel": [0.8, "inf"], "Episode/rew_tracking_lin_vel": [0.75, "inf"]},
-    ),
 )
 
-t1_29dof_fast_sac = ExperimentConfig(
-    env_class="holosoma.envs.locomotion.locomotion_manager.LeggedRobotLocomotionManager",
-    training=TrainingConfig(project="hv-t1-manager", name="t1_29dof_fast_sac_manager"),
-    algo=replace(
-        algo.fast_sac, config=replace(algo.fast_sac.config, num_learning_iterations=100000, use_symmetry=True)
-    ),
+_algo_ppo = replace(algo.ppo, config=replace(algo.ppo.config, num_learning_iterations=25000, use_symmetry=True))
+_algo_fast_sac = replace(
+    algo.fast_sac, config=replace(algo.fast_sac.config, num_learning_iterations=100000, use_symmetry=True)
+)
+
+_nightly_ppo = NightlyConfig(
+    iterations=10000,
+    metrics={"Episode/rew_tracking_ang_vel": [0.8, "inf"], "Episode/rew_tracking_lin_vel": [0.75, "inf"]},
+)
+_nightly_fast_sac = NightlyConfig(
+    iterations=50000,
+    metrics={"Episode/rew_tracking_ang_vel": [0.65, "inf"], "Episode/rew_tracking_lin_vel": [0.9, "inf"]},
+)
+
+# ── IsaacGym ────────────────────────────────────────────────────────────────
+
+t1_29dof_isaacgym = ExperimentConfig(
+    **_SHARED,
+    training=TrainingConfig(project="hv-t1-manager", name="t1_29dof_isaacgym_manager"),
+    algo=_algo_ppo,
     simulator=simulator.isaacgym,
-    robot=robot.t1_29dof_waist_wrist,
-    terrain=terrain.terrain_locomotion_mix,
-    observation=observation.t1_29dof_loco_single_wolinvel,
-    action=action.t1_29dof_joint_pos,
-    termination=termination.t1_29dof_termination,
-    randomization=randomization.t1_29dof_randomization,
-    command=command.t1_29dof_command,
+    reward=reward.t1_29dof_loco,
+    curriculum=curriculum.t1_29dof_curriculum,
+    nightly=_nightly_ppo,
+)
+
+t1_29dof_fast_sac_isaacgym = ExperimentConfig(
+    **_SHARED,
+    training=TrainingConfig(project="hv-t1-manager", name="t1_29dof_fast_sac_isaacgym_manager"),
+    algo=_algo_fast_sac,
+    simulator=simulator.isaacgym,
     curriculum=curriculum.t1_29dof_curriculum_fast_sac,
     reward=reward.t1_29dof_loco_fast_sac,
-    nightly=NightlyConfig(
-        iterations=50000,
-        metrics={"Episode/rew_tracking_ang_vel": [0.65, "inf"], "Episode/rew_tracking_lin_vel": [0.9, "inf"]},
-    ),
+    nightly=_nightly_fast_sac,
 )
 
-__all__ = ["t1_29dof", "t1_29dof_fast_sac"]
+# ── MJWarp ──────────────────────────────────────────────────────────────────
+
+t1_29dof_mjwarp = ExperimentConfig(
+    **_SHARED,
+    training=TrainingConfig(project="hv-t1-manager", name="t1_29dof_mjwarp_manager"),
+    algo=_algo_ppo,
+    simulator=simulator.mjwarp,
+    reward=reward.t1_29dof_loco,
+    curriculum=curriculum.t1_29dof_curriculum,
+    nightly=_nightly_ppo,
+)
+
+t1_29dof_fast_sac_mjwarp = ExperimentConfig(
+    **_SHARED,
+    training=TrainingConfig(project="hv-t1-manager", name="t1_29dof_fast_sac_mjwarp_manager"),
+    algo=_algo_fast_sac,
+    simulator=simulator.mjwarp,
+    curriculum=curriculum.t1_29dof_curriculum_fast_sac,
+    reward=reward.t1_29dof_loco_fast_sac,
+    nightly=_nightly_fast_sac,
+)
+
+# ── Backward-compatible aliases ─────────────────────────────────────────────
+
+t1_29dof = t1_29dof_isaacgym
+t1_29dof_fast_sac = t1_29dof_fast_sac_isaacgym
+
+__all__ = [
+    "t1_29dof_isaacgym",
+    "t1_29dof_fast_sac_isaacgym",
+    "t1_29dof_mjwarp",
+    "t1_29dof_fast_sac_mjwarp",
+    # Aliases
+    "t1_29dof",
+    "t1_29dof_fast_sac",
+]

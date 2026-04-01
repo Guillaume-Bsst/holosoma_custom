@@ -1175,8 +1175,23 @@ g1_29dof_w_object = replace(
     ),
 )
 
+g1_27dof_w_object = replace(
+    g1_27dof,
+    asset=replace(
+        g1_27dof.asset,
+        urdf_file="g1/main_mesh_collision_halfspherehand.urdf",
+    ),
+    control=replace(
+        g1_27dof.control,
+        action_scales_by_effort_limit_over_p_gain=True,
+        action_scale=0.25,
+    ),
+)
+
 DEFAULTS = {
     "g1_29dof": g1_29dof,
+    "g1_27dof": g1_27dof,
     "t1_29dof_waist_wrist": t1_29dof_waist_wrist,
     "g1_29dof_w_object": g1_29dof_w_object,
+    "g1_27dof_w_object": g1_27dof_w_object,
 }
