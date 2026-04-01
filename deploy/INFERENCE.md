@@ -84,20 +84,20 @@ ROS2 topics used:
 > Follow the installation instructions in that repository. The workspace ends up at
 > `unitree_ros2/cyclonedds_ws/` alongside `holosoma/`.
 
-### Manual launch (5 terminals)
+### Manual launch (4 terminals)
 
-Terminals 1, 3, 4, 5 are run from `unitree_ros2/cyclonedds_ws/`; terminal 2 from `holosoma/`.
+All terminals are run from `holosoma/`.
 
 **Terminal 1 — PyBullet simulation**:
 
 ```bash
 mamba activate unitree_control_interface
-source install/setup.bash
+source ../unitree_ros2/cyclonedds_ws/install/setup.bash
 source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION)
 ros2 launch unitree_simulation launch_sim.launch.py robot:=g1 unlock_base:=False
 ```
 
-**Terminal 2 — Policy** *(run from `holosoma/`)*:
+**Terminal 2 — Policy**:
 
 ```bash
 source scripts/source_inference_setup.sh
@@ -117,12 +117,12 @@ python src/holosoma_inference/holosoma_inference/run_policy.py \
 
 ```bash
 mamba activate unitree_control_interface
-source install/setup.bash
+source ../unitree_ros2/cyclonedds_ws/install/setup.bash
 source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION)
 ros2 launch unitree_control_interface watchdog.launch.py robot_type:=g1
 ```
 
-**Terminal 4 — Bridge** *(run from `holosoma/`)*:
+**Terminal 4 — Bridge**:
 
 ```bash
 mamba activate unitree_control_interface
@@ -140,14 +140,5 @@ The bridge will automatically move the robot to the standing configuration (~5 s
 > has 27 actuated joints). When a 27-DOF policy is detected, commands are passed
 > through directly. The detected mode is logged at startup:
 > `Policy DOF auto-detected: 27 (G1 base 27-DOF)` or `29 (G1 pro 29-DOF)`.
-
-**Terminal 5 — Unlock base** *(once the bridge is ready)*:
-
-```bash
-mamba activate unitree_control_interface
-source ../unitree_ros2/cyclonedds_ws/install/setup.bash
-source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION)
-ros2 topic pub --once /unlock_base std_msgs/msg/Empty {}
-```
 
 Then press `s` in the policy terminal to start the motion clip.

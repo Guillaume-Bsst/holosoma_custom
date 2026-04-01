@@ -30,7 +30,9 @@ import numpy as np
 import rclpy
 from loguru import logger
 from rclpy.node import Node
+from std_msgs.msg import Empty
 from sensor_msgs.msg import Imu, JointState
+from sdk import ros2
 from unitree_hg.msg import LowState
 
 try:
@@ -139,6 +141,7 @@ class UnitreePybulletBridgeNode(Node):
         # ── holosoma publishers ──────────────────────────────────────────────
         self._state_pub = self.create_publisher(JointState, "/holosoma/low_state", 10)
         self._imu_pub   = self.create_publisher(Imu,        "/holosoma/imu",       10)
+        self._unlock_pub = self.create_publisher(Empty,     "/unlock_base",        10)
 
         # ── IMU buffer — subscribe to /lowstate to access imu_state directly ─
         # (G1ControlInterface callback only exposes joint positions/velocities)
@@ -198,6 +201,7 @@ class UnitreePybulletBridgeNode(Node):
                 "Standing configuration reached — unlocked with 1 s transition. "
                 "Waiting for policy commands on /holosoma/low_cmd ..."
             )
+            self._unlock_pub.publish(Empty())
 
         # Publish joint state to holosoma (expand to policy DOF if needed)
         n_pol = self._n_policy if self._n_policy else N_HOLOSOMA  # default 29 before detection
