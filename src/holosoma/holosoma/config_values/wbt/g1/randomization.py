@@ -141,86 +141,19 @@ g1_29dof_wbt_randomization_isaacsim_w_object = RandomizationManagerCfg(
     },
 )
 
-# MJWarp-specific randomization: wider domain randomization to compensate for
-# MJWarp/classic-Mujoco physics similarity, which otherwise causes overfitting.
-_mjwarp_setup_terms = {
-    **base_setup_terms,
-    "push_randomizer_state": RandomizationTermCfg(
-        func="holosoma.managers.randomization.terms.locomotion:PushRandomizerState",
-        params={
-            "push_interval_s": [1.0, 3.0],
-            "max_push_vel": [0.8, 0.8, 0.3, 0.8, 0.8, 1.0],
-            "enabled": True,
-        },
-    ),
-    "actuator_randomizer_state": RandomizationTermCfg(
-        func="holosoma.managers.randomization.terms.locomotion:ActuatorRandomizerState",
-        params={
-            "kp_range": [0.8, 1.2],
-            "kd_range": [0.8, 1.2],
-            "rfi_lim_range": [0.8, 1.2],
-            "enable_pd_gain": True,
-            "enable_rfi_lim": True,
-        },
-    ),
-    "setup_action_delay_buffers": RandomizationTermCfg(
-        func="holosoma.managers.randomization.terms.locomotion:setup_action_delay_buffers",
-        params={
-            "ctrl_delay_step_range": [0, 1],
-            "enabled": True,
-        },
-    ),
-    "randomize_base_com_startup": RandomizationTermCfg(
-        func="holosoma.managers.randomization.terms.locomotion:randomize_base_com_startup",
-        params={
-            "base_com_range": {"x": [-0.05, 0.05], "y": [-0.05, 0.05], "z": [-0.05, 0.05]},
-            "enabled": True,
-        },
-    ),
-    "setup_dof_pos_bias": RandomizationTermCfg(
-        func="holosoma.managers.randomization.terms.locomotion:setup_dof_pos_bias",
-        params={
-            "dof_pos_bias_range": [-0.05, 0.05],
-            "enabled": True,
-        },
-    ),
-    "randomize_mass_startup": RandomizationTermCfg(
-        func="holosoma.managers.randomization.terms.locomotion:randomize_mass_startup",
-        params={
-            "link_mass_range": [0.95, 1.1],
-            "added_mass_range": [-0.5, 1.0],
-            "enable_link_mass": True,
-            "enable_base_mass": True,
-            "enabled": True,
-        },
-    ),
-}
-
-_mjwarp_reset_terms = {
-    **base_reset_terms,
-    "randomize_dof_state": RandomizationTermCfg(
-        func="holosoma.managers.randomization.terms.locomotion:randomize_dof_state",
-        params={
-            "joint_pos_scale_range": [1.0, 1.0],
-            "joint_vel_range": [-0.2, 0.2],
-            "joint_pos_bias_range": [-0.05, 0.05],
-            "randomize_dof_pos_bias": True,
-        },
-    ),
-}
-
+# MJWarp randomization: aligned with IsaacSim config (same base terms).
 g1_29dof_wbt_randomization_mjwarp = RandomizationManagerCfg(
-    setup_terms=_mjwarp_setup_terms,
-    reset_terms=_mjwarp_reset_terms,
+    setup_terms={**base_setup_terms},
+    reset_terms={**base_reset_terms},
     step_terms={**base_step_terms},
 )
 
 g1_29dof_wbt_randomization_mjwarp_w_object = RandomizationManagerCfg(
     setup_terms={
-        **_mjwarp_setup_terms,
+        **base_setup_terms,
         **object_state_dr_at_setup,
     },
-    reset_terms=_mjwarp_reset_terms,
+    reset_terms={**base_reset_terms},
     step_terms={**base_step_terms},
 )
 
