@@ -8,6 +8,12 @@ source ${SCRIPT_DIR}/source_common.sh
 source ${CONDA_ROOT}/bin/activate hsinference
 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CONDA_ROOT}/envs/hsinference/lib/python3.11/site-packages/lib
 
+# Ensure holosoma_inference is installed (editable mode)
+if ! python -c "import holosoma_inference" 2>/dev/null; then
+    echo "holosoma_inference not found — installing in editable mode..."
+    pip install -e ${SCRIPT_DIR}/../src/holosoma_inference
+fi
+
 # Check UFW status if ufw command exists (no sudo required)
 if command -v ufw >/dev/null 2>&1; then
     if ufw status 2>/dev/null | grep -q "Status: inactive"; then
