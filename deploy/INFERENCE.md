@@ -54,6 +54,9 @@ python src/holosoma/holosoma/run_sim.py \
 
 **Terminal 2 — Policy:**
 
+> Use `inference:g1-27dof-wbt` or `inference:g1-29dof-wbt` depending on the DOF
+> count the model was trained with (27-DOF models lock waist roll/pitch).
+
 ```bash
 source scripts/source_inference_setup.sh
 python src/holosoma_inference/holosoma_inference/run_policy.py \
@@ -98,6 +101,9 @@ ros2 launch unitree_simulation launch_sim.launch.py robot:=g1 unlock_base:=False
 ```
 
 **Terminal 2 — Policy**:
+
+> Use `inference:g1-27dof-wbt` or `inference:g1-29dof-wbt` depending on the DOF
+> count the model was trained with (27-DOF models lock waist roll/pitch).
 
 ```bash
 source scripts/source_inference_setup.sh

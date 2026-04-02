@@ -48,11 +48,43 @@ g1_29dof_wbt = InferenceConfig(
         ),
     ),
 # fmt: on
-    observation=observation.wbt,
+    observation=observation.wbt_g1_29dof,
+    task=task.wbt,
+)
+
+# fmt: off
+g1_27dof_wbt = InferenceConfig(
+    robot=replace(
+        robot.g1_27dof,
+        stiff_startup_pos=(
+            -0.312, 0.0, 0.0, 0.669, -0.363, 0.0,   # left leg
+            -0.312, 0.0, 0.0, 0.669, -0.363, 0.0,   # right leg
+            0.0,                                      # waist (yaw only)
+            0.2, 0.2, 0.0, 0.6, 0.0, 0.0, 0.0,      # left arm
+            0.2, -0.2, 0.0, 0.6, 0.0, 0.0, 0.0,     # right arm
+        ),
+        stiff_startup_kp=(
+            350.0, 200.0, 200.0, 300.0, 300.0, 150.0,
+            350.0, 200.0, 200.0, 300.0, 300.0, 150.0,
+            200.0,
+            40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0,
+            40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0,
+        ),
+        stiff_startup_kd=(
+            5.0, 5.0, 5.0, 10.0, 5.0, 5.0,
+            5.0, 5.0, 5.0, 10.0, 5.0, 5.0,
+            5.0,
+            3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0,
+            3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0,
+        ),
+    ),
+# fmt: on
+    observation=observation.wbt_g1_27dof,
     task=task.wbt,
 )
 
 DEFAULTS = {
+    "g1-27dof-wbt": g1_27dof_wbt,
     "g1-29dof-loco": g1_29dof_loco,
     "t1-29dof-loco": t1_29dof_loco,
     "g1-29dof-wbt": g1_29dof_wbt,
