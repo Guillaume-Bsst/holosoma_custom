@@ -86,6 +86,14 @@ ROS2 topics used:
 > [inria-paris-robotics-lab/unitree_control_interface](https://github.com/inria-paris-robotics-lab/unitree_control_interface).
 > Follow the installation instructions in that repository. The workspace ends up at
 > `unitree_ros2/cyclonedds_ws/` alongside `holosoma/`.
+>
+> If you modify anything in `unitree_control_interface` (e.g. watchdog limits in
+> `config/g1_default_limits.yaml`), rebuild the workspace before relaunching:
+```bash
+mamba activate unitree_control_interface
+export CPATH=$CONDA_PREFIX/include/eigen3:$CPATH
+cd ../unitree_ros2/cyclonedds_ws && source install/setup.bash && colcon build --packages-select unitree_control_interface && cd -
+```
 
 ### Manual launch (4 terminals)
 
