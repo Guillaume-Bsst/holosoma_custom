@@ -50,9 +50,29 @@ class MujocoSceneManager:
         simulator_config : SimulatorConfig
             Simulator configuration containing physics parameters.
         """
-        # TODO: expose to Mujoco-specific config
-        self.world_spec.option.gravity = [0, 0, -9.81]
-        self.world_spec.option.timestep = 1.0 / simulator_config.sim.fps  # type: ignore[attr-defined]
+        mj_cfg = simulator_config.sim.mujoco  # type: ignore[attr-defined]
+        opt = self.world_spec.option
+        opt.gravity = mj_cfg.gravity
+        opt.timestep = 1.0 / simulator_config.sim.fps  # type: ignore[attr-defined]
+        opt.iterations = mj_cfg.iterations
+        opt.tolerance = mj_cfg.tolerance
+        opt.impratio = mj_cfg.impratio
+
+        # Enum fields: MuJoCo expects mjtSolver / mjtIntegrator / mjtCone enums
+        _SOLVER_MAP = {"PGS": mujoco.mjtSolver.mjSOL_PGS, "CG": mujoco.mjtSolver.mjSOL_CG, "Newton": mujoco.mjtSolver.mjSOL_NEWTON}
+        _INTEGRATOR_MAP = {"Euler": mujoco.mjtIntegrator.mjINT_EULER, "RK4": mujoco.mjtIntegrator.mjINT_RK4, "implicit": mujoco.mjtIntegrator.mjINT_IMPLICIT, "implicitfast": mujoco.mjtIntegrator.mjINT_IMPLICITFAST}
+        _CONE_MAP = {"pyramidal": mujoco.mjtCone.mjCONE_PYRAMIDAL, "elliptic": mujoco.mjtCone.mjCONE_ELLIPTIC}
+
+        if mj_cfg.solver not in _SOLVER_MAP:
+            raise ValueError(f"Unknown MuJoCo solver '{mj_cfg.solver}'. Choose from: {list(_SOLVER_MAP)}")
+        if mj_cfg.integrator not in _INTEGRATOR_MAP:
+            raise ValueError(f"Unknown MuJoCo integrator '{mj_cfg.integrator}'. Choose from: {list(_INTEGRATOR_MAP)}")
+        if mj_cfg.cone not in _CONE_MAP:
+            raise ValueError(f"Unknown MuJoCo cone '{mj_cfg.cone}'. Choose from: {list(_CONE_MAP)}")
+
+        opt.solver = _SOLVER_MAP[mj_cfg.solver]
+        opt.integrator = _INTEGRATOR_MAP[mj_cfg.integrator]
+        opt.cone = _CONE_MAP[mj_cfg.cone]
 
     def add_materials(self) -> None:
         """Add standard materials and textures to the world specification.

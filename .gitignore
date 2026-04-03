@@ -27,6 +27,7 @@ slurm_logs/
 .apptainer_tmp/
 scratch_space/
 tmp_space/
+holosoma_logs/
 
 # Isaacsim Converted Files
 src/holosoma/holosoma/data/robots/converted/

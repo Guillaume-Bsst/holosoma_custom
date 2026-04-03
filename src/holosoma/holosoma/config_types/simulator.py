@@ -77,6 +77,42 @@ class ResetManagerConfig:
 
 
 @dataclass(frozen=True)
+class MujocoPhysicsConfig:
+    """Low-level MuJoCo solver and contact settings.
+
+    Mirrors PhysxConfig for the MuJoCo physics engine.
+    See MuJoCo documentation for full details on each parameter.
+
+    Command line usage:
+        --simulator.config.sim.mujoco.solver=Newton
+        --simulator.config.sim.mujoco.iterations=200
+    """
+
+    solver: str = "Newton"
+    """Constraint solver algorithm. Options: "PGS", "CG", "Newton".
+    Newton is the most accurate but slowest; PGS is fastest but least accurate."""
+
+    iterations: int = 100
+    """Maximum number of solver iterations per step."""
+
+    tolerance: float = 1e-8
+    """Early-termination tolerance for the solver."""
+
+    integrator: str = "Euler"
+    """Numerical integrator. Options: "Euler", "RK4", "implicit", "implicitfast"."""
+
+    cone: str = "pyramidal"
+    """Friction cone type. Options: "pyramidal", "elliptic".
+    Elliptic is more accurate; pyramidal is faster."""
+
+    impratio: float = 1.0
+    """Ratio of frictional-to-normal constraint impedance."""
+
+    gravity: list[float] = field(default_factory=lambda: [0.0, 0.0, -9.81])
+    """Gravity vector [x, y, z] in m/s^2."""
+
+
+@dataclass(frozen=True)
 class PhysxConfig:
     """Low-level PhysX solver settings."""
 
@@ -137,6 +173,9 @@ class SimEngineConfig:
 
     physx: PhysxConfig | None = None
     """PhysX solver configuration. Only used by IsaacGym/IsaacSim — leave None for MuJoCo."""
+
+    mujoco: MujocoPhysicsConfig = field(default_factory=MujocoPhysicsConfig)
+    """MuJoCo solver configuration. Only used by MuJoCo/MJWarp — ignored by IsaacSim."""
 
     render_mode: str = "human"
     """Rendering mode requested from the simulator."""
