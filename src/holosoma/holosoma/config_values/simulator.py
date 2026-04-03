@@ -1,5 +1,6 @@
 from holosoma.config_types.simulator import (
     MujocoBackend,
+    MujocoPhysicsConfig,
     PhysxConfig,
     RigidObjectConfig,
     SceneConfig,
@@ -55,6 +56,13 @@ isaacsim = SimulatorConfig(
 )
 
 
+# MuJoCo physics tuned for humanoid WBT (SOTA: PHC, PULSE, ExBody2).
+# Defaults are MuJoCo defaults: integrator=Euler, cone=pyramidal.
+_mujoco_wbt_physics = MujocoPhysicsConfig(
+    integrator="implicitfast",  # default: "Euler" — implicitfast is more stable with stiff PD + contacts
+    cone="elliptic",  # default: "pyramidal" — elliptic is more accurate for friction
+)
+
 mujoco = SimulatorConfig(
     _target_="holosoma.simulator.mujoco.mujoco.MuJoCo",
     _recursive_=False,
@@ -69,6 +77,7 @@ mujoco = SimulatorConfig(
             substeps=1,
             render_mode="fake",
             render_interval=1,
+            mujoco=_mujoco_wbt_physics,
         ),
         mujoco_backend=MujocoBackend.CLASSIC,  # Explicit for clarity
     ),
@@ -89,6 +98,7 @@ mjwarp = SimulatorConfig(
             substeps=1,
             render_mode="fake",
             render_interval=1,
+            mujoco=_mujoco_wbt_physics,
         ),
         mujoco_backend=MujocoBackend.WARP,  # GPU-accelerated backend
     ),
@@ -110,6 +120,7 @@ mjwarp_w_object = SimulatorConfig(
             substeps=1,
             render_mode="fake",
             render_interval=1,
+            mujoco=_mujoco_wbt_physics,
         ),
         mujoco_backend=MujocoBackend.WARP,
     ),

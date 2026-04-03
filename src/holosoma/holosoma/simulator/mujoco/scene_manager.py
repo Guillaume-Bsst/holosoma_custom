@@ -218,13 +218,12 @@ class MujocoSceneManager:
             pos=[0, 0, 0],
             material="grid",
             friction=[
-                # Ignore terrain config until we expose Mujoco-specific parameters
-                0.7,  # reasonable default
-                0.005,  # reasonable default
-                0.001,  # reasonable default
+                1.0,  # sliding  (was 0.7, MuJoCo default: 1.0, matches IsaacSim static_friction=1.0)
+                0.005,  # torsional  (MuJoCo default: 0.005)
+                0.0001,  # rolling  (was 0.001, MuJoCo default: 0.0001)
             ],  # [sliding, torsional, rolling]
-            solimp=[0.99, 0.99, 0.01, 0.5, 2],  # 5 elements: [dmin, dmax, width, midpoint, power]
-            solref=[0.001, 1],  # 2 elements: [timeconst, dampratio]
+            solimp=[0.9, 0.95, 0.001, 0.5, 2],  # was [0.99, 0.99, 0.01, 0.5, 2], MuJoCo default: [0.9, 0.95, 0.001, 0.5, 2]
+            solref=[0.005, 1],  # was [0.001, 1], MuJoCo default: [0.02, 1] — 0.005 is a middle ground for stability
         )
 
     def _create_trimesh(self, terrain_state: TerrainTermBase) -> mujoco.MjSpec.Geom:
@@ -251,13 +250,12 @@ class MujocoSceneManager:
             pos=[0.0, 0.0, 0.0],
             material="solid_gray",
             friction=[
-                # Ignore terrain config until we expose Mujoco-specific parameters
-                0.7,  # reasonable default
-                0.005,  # reasonable default
-                0.001,  # reasonable default
+                1.0,  # sliding  (was 0.7, MuJoCo default: 1.0, matches IsaacSim static_friction=1.0)
+                0.005,  # torsional  (MuJoCo default: 0.005)
+                0.0001,  # rolling  (was 0.001, MuJoCo default: 0.0001)
             ],  # [sliding, torsional, rolling]
-            solimp=[0.99, 0.99, 0.01, 0.5, 2],
-            solref=[0.001, 1],
+            solimp=[0.9, 0.95, 0.001, 0.5, 2],  # was [0.99, 0.99, 0.01, 0.5, 2], MuJoCo default: [0.9, 0.95, 0.001, 0.5, 2]
+            solref=[0.005, 1],  # was [0.001, 1], MuJoCo default: [0.02, 1]
         )
 
     def _create_hfield(self, terrain_state: TerrainTermBase) -> mujoco.MjSpec.Geom:
@@ -326,13 +324,12 @@ class MujocoSceneManager:
                 z_offset if z_offset < 0 else 0.0,
             ],
             friction=[
-                # Ignore terrain config until we expose Mujoco-specific parameters
-                0.7,  # reasonable default
-                0.005,  # reasonable default
-                0.001,  # reasonable default
+                1.0,  # sliding  (was 0.7, MuJoCo default: 1.0, matches IsaacSim static_friction=1.0)
+                0.005,  # torsional  (MuJoCo default: 0.005)
+                0.0001,  # rolling  (was 0.001, MuJoCo default: 0.0001)
             ],  # [sliding, torsional, rolling]
-            solimp=[0.99, 0.99, 0.01, 0.5, 2],
-            solref=[0.001, 1],
+            solimp=[0.9, 0.95, 0.001, 0.5, 2],  # was [0.99, 0.99, 0.01, 0.5, 2], MuJoCo default: [0.9, 0.95, 0.001, 0.5, 2]
+            solref=[0.005, 1],  # was [0.001, 1], MuJoCo default: [0.02, 1]
         )
 
     def add_robot(
