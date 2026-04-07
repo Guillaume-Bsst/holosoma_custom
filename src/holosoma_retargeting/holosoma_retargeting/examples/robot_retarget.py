@@ -21,6 +21,9 @@ src_root = Path(__file__).resolve().parents[2]
 if str(src_root) not in sys.path:
     sys.path.insert(0, str(src_root))
 
+# Pipeline output directory: src/holosoma/holosoma/data/pipeline/
+_PIPELINE_DATA_DIR = Path(__file__).resolve().parents[3] / "holosoma" / "holosoma" / "data" / "pipeline"
+
 from holosoma_retargeting.config_types.data_type import DEMO_JOINTS_REGISTRY, MotionDataConfig  # noqa: E402
 from holosoma_retargeting.config_types.retargeter import RetargeterConfig  # noqa: E402
 from holosoma_retargeting.config_types.retargeting import RetargetingConfig  # noqa: E402
@@ -58,11 +61,11 @@ DEFAULT_DATA_FORMATS = {
     "climbing": "mocap",
 }
 
-DEFAULT_SAVE_DIRS = {
-    "robot_only": "demo_results/{robot_name}/robot_only/omomo",
-    "object_interaction": "demo_results/{robot_name}/object_interaction/omomo",
-    "climbing": "demo_results/{robot_name}/climbing/mocap_climb",
-}
+DEFAULT_RETARGET_METHOD = "omniretarget"
+
+# Default save dir template — resolved to an absolute path in main()
+# Structure: <pipeline_data_dir>/{robot_name}/{retarget_method}/{task_name}/
+_SAVE_DIR_TEMPLATE = "{robot_name}/{retarget_method}/{task_name}"
 
 
 # Constants for numpy arrays (not in dataclass to avoid tyro parsing issues)
@@ -537,7 +540,7 @@ def initialize_robot_pose(
             object_poses_augmented = convert_object_poses_to_mujoco_order(object_poses_augmented)
             object_poses = convert_object_poses_to_mujoco_order(object_poses)
 
-            original_path = save_dir / f"{task_name}_original.npz"
+            original_path = save_dir / "retargeted_w_obj_original.npz"
             if not original_path.exists():
                 raise FileNotFoundError(f"Original file not found: {original_path}. Run without --augmentation first.")
 
@@ -553,7 +556,7 @@ def initialize_robot_pose(
 
     if task_type == "climbing":
         if augmentation:
-            original_path = save_dir / f"{task_name}_original.npz"
+            original_path = save_dir / "retargeted_w_obj_original.npz"
             if not original_path.exists():
                 raise FileNotFoundError(f"Original file not found: {original_path}. Run without --augmentation first.")
 
@@ -577,19 +580,23 @@ def determine_output_path(
     augmentation: bool,
 ) -> str:
     """Determine output file path based on task and augmentation.
+
+    Pipeline convention:
+        data/pipeline/{robot_name}/{task_name}/retargeted[_w_obj][_original|_augmented].npz
+
     Args:
         task_type: Type of task
-        save_dir: Save directory path
+        save_dir: Save directory path (already includes robot_name/task_name)
         task_name: Task name
         augmentation: Whether this is an augmentation run
     Returns:
         Output file path
     """
     if task_type == "robot_only":
-        return str(save_dir / f"{task_name}.npz")
+        return str(save_dir / "retargeted.npz")
     if task_type in ("object_interaction", "climbing"):
         suffix = "_augmented" if augmentation else "_original"
-        return str(save_dir / f"{task_name}{suffix}.npz")
+        return str(save_dir / f"retargeted_w_obj{suffix}.npz")
     raise ValueError(f"Unknown task type: {task_type}")
 
 
@@ -611,9 +618,14 @@ def main(cfg: RetargetingConfig) -> None:
 
     # Set defaults based on task type
     data_format: str = cfg.data_format or DEFAULT_DATA_FORMATS[task_type]
-    save_dir = cfg.save_dir if cfg.save_dir is not None else Path(
-        DEFAULT_SAVE_DIRS[task_type].format(robot_name=robot_name)
-    )
+    if cfg.save_dir is not None:
+        save_dir = cfg.save_dir
+    else:
+        save_dir = _PIPELINE_DATA_DIR / _SAVE_DIR_TEMPLATE.format(
+            robot_name=robot_name,
+            retarget_method=DEFAULT_RETARGET_METHOD,
+            task_name=task_name,
+        )
     data_path = cfg.data_path
 
     os.makedirs(save_dir, exist_ok=True)

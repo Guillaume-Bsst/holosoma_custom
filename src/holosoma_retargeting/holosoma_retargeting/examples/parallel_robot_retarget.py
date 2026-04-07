@@ -23,6 +23,9 @@ src_root = Path(__file__).resolve().parents[2]
 if str(src_root) not in sys.path:
     sys.path.insert(0, str(src_root))
 
+# Pipeline output directory: src/holosoma/holosoma/data/pipeline/
+_PIPELINE_DATA_DIR = Path(__file__).resolve().parents[3] / "holosoma" / "holosoma" / "data" / "pipeline"
+
 from holosoma_retargeting.config_types.data_type import MotionDataConfig  # noqa: E402
 from holosoma_retargeting.config_types.retargeting import ParallelRetargetingConfig  # noqa: E402
 from holosoma_retargeting.config_types.robot import RobotConfig  # noqa: E402
@@ -30,8 +33,10 @@ from holosoma_retargeting.config_types.robot import RobotConfig  # noqa: E402
 # Import reusable functions from robot_retarget.py
 from holosoma_retargeting.examples.robot_retarget import (  # type: ignore[import-not-found]  # noqa: E402
     DEFAULT_DATA_FORMATS,
+    DEFAULT_RETARGET_METHOD,
     build_retargeter_kwargs_from_config,
     create_task_constants,
+    determine_output_path,
     initialize_robot_pose,
     load_motion_data,
     setup_object_data,
@@ -47,13 +52,6 @@ from holosoma_retargeting.src.utils import (  # type: ignore[import-not-found]  
 )
 
 # ----------------------------- Constants -----------------------------
-
-# Override save directories for parallel processing (use demo_results_parallel instead of demo_results)
-PARALLEL_SAVE_DIRS = {
-    "robot_only": "demo_results_parallel/{robot_name}/robot_only/omomo",
-    "object_interaction": "demo_results_parallel/{robot_name}/object_interaction/omomo",
-    "climbing": "demo_results_parallel/{robot_name}/climbing/mocap_climb",
-}
 
 
 def find_files(data_dir: Path, data_format: str, object_name: str | None = None):
@@ -158,16 +156,19 @@ def process_single_task(args):
         robot_config,
         motion_data_config,
         task_config,
-        retargeter,
+        retargeter_config,
         augmentation,
     ) = args
 
-    os.makedirs(save_dir, exist_ok=True)
     if task_type == "climbing":
         file_path = "/".join(file_path.split("/")[:-1])
         task_name = extract_task_name(file_path)
     else:
         task_name = extract_task_name(file_path)
+
+    # Per-task subdirectory under save_dir
+    task_save_dir = Path(save_dir) / task_name
+    os.makedirs(task_save_dir, exist_ok=True)
     print(f"Processing: {task_name}")
 
     # Task-specific object setup: set default object_dir for climbing if not provided
@@ -199,7 +200,10 @@ def process_single_task(args):
         human_joints = human_joints_original.copy()
         object_poses = object_poses_original.copy()
         aug_name = aug_config["name"]
-        file_name = f"{save_dir}/{task_name}_{aug_name}.npz"
+        is_augmentation_run = k > 0
+
+        # Use the same output naming convention as robot_retarget.py
+        file_name = determine_output_path(task_type, task_save_dir, task_name, is_augmentation_run)
 
         print(f"  Processing augmentation: {aug_name}")
 
@@ -212,7 +216,7 @@ def process_single_task(args):
                 task_config.object_dir,
                 smpl_scale,
                 task_config,
-                augmentation=(k > 0),
+                augmentation=is_augmentation_run,
                 object_scale_augmented=aug_config["scale"],
             )
         else:
@@ -222,11 +226,11 @@ def process_single_task(args):
                 task_config.object_dir,
                 smpl_scale,
                 task_config,
-                augmentation=(k > 0),
+                augmentation=is_augmentation_run,
             )
 
         # Create retargeter
-        retargeter_kwargs = build_retargeter_kwargs_from_config(retargeter, constants, object_urdf_path, task_type)
+        retargeter_kwargs = build_retargeter_kwargs_from_config(retargeter_config, constants, object_urdf_path, task_type)
         retargeter = InteractionMeshRetargeter(**retargeter_kwargs)
 
         # Preprocess motion data
@@ -248,9 +252,6 @@ def process_single_task(args):
             foot_sticking_sequences[0][toe_names[0]] = False
             foot_sticking_sequences[0][toe_names[1]] = False
 
-        # Determine if this is an augmentation run (k > 0 means we're augmenting)
-        is_augmentation_run = k > 0
-
         if task_type == "object_interaction":
             # Initialize robot pose
             q_init, q_nominal, object_poses_augmented, human_joints, object_poses = initialize_robot_pose(
@@ -262,7 +263,7 @@ def process_single_task(args):
                 retargeter,
                 task_config,
                 is_augmentation_run,
-                save_dir,
+                task_save_dir,
                 task_name,
                 augmentation_translation=aug_config["translation"],
                 augmentation_rotation=aug_config["rotation"],
@@ -278,12 +279,12 @@ def process_single_task(args):
                 retargeter,
                 task_config,
                 is_augmentation_run,
-                save_dir,
+                task_save_dir,
                 task_name,
             )
 
         # Check if file exists and skip retargeting if it does (after setting up conditions)
-        if Path.exists(Path(file_name)):
+        if Path(file_name).exists():
             continue
 
         # Retarget motion
@@ -313,9 +314,12 @@ def main(cfg: ParallelRetargetingConfig) -> None:
 
     # Set defaults based on task type
     data_format: str = cfg.data_format or DEFAULT_DATA_FORMATS[task_type]
-    save_dir = cfg.save_dir if cfg.save_dir is not None else Path(
-        PARALLEL_SAVE_DIRS[task_type].format(robot_name=robot_name)
-    )
+    if cfg.save_dir is not None:
+        save_dir = cfg.save_dir
+    else:
+        # Use the same pipeline directory as robot_retarget.py, but without {task_name}
+        # (each worker creates its own task subdirectory)
+        save_dir = _PIPELINE_DATA_DIR / robot_name / DEFAULT_RETARGET_METHOD
     data_dir = cfg.data_dir
 
     os.makedirs(save_dir, exist_ok=True)

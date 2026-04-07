@@ -612,11 +612,18 @@ def run_simulator(args_cli: DataConversionConfig):
             log["_meta_source_file"] = args_cli.input_file
             log["_meta_step"] = "data_conversion"
 
-            if args_cli.output_name is None:
-                raise ValueError("output_name cannot be None")
-            output_res_folder = Path(args_cli.output_name).parent
+            # Auto-derive output path if not provided:
+            # Place motion.npz / motion_w_obj.npz next to the input retargeted file
+            if args_cli.output_name is not None:
+                output_path = args_cli.output_name
+            else:
+                input_dir = Path(args_cli.input_file).parent
+                output_filename = "motion_w_obj.npz" if has_dynamic_object else "motion.npz"
+                output_path = str(input_dir / output_filename)
+            output_res_folder = Path(output_path).parent
             os.makedirs(output_res_folder, exist_ok=True)
-            np.savez(args_cli.output_name, **log)
+            np.savez(output_path, **log)
+            print(f"[INFO]: Saved output to {output_path}")
 
         if args_cli.once and file_saved:
             print("[INFO]: Motion replay completed, exiting...")
