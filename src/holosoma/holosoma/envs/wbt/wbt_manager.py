@@ -78,6 +78,15 @@ class WholeBodyTrackingManager(BaseTask):
         motion_command.update_metrics()
         self.log_dict.update(motion_command.metrics)
 
+        # Success Rate: fraction of terminating episodes that completed the motion (not early-terminated by bad_tracking)
+        resetting = self.reset_buf.bool()
+        if resetting.any():
+            # motion_ends fires when the clip is fully played; timeout fires at max_episode_length.
+            # Both count as success. bad_tracking is the only failure mode.
+            motion_ended = motion_command.time_steps >= motion_command.motion.time_step_total - 2
+            success = resetting & (self.time_out_buf | motion_ended)
+            self.log_dict["motion/success_rate"] = success.float().sum() / resetting.float().sum()
+
     def reset_all(self):
         # If reset_all is called several times, clear buffer in motion_command
         motion_command = self.command_manager.get_state("motion_command")
