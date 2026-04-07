@@ -42,6 +42,18 @@ class MotionLoader:
 
         logger.info(f"Loading motion file: {motion_file}")
         body_names_in_motion_data, joint_names_in_motion_data = self._load_data_from_motion_npz(motion_file, device)
+
+        # Validate that all robot joints exist in the motion data
+        missing_joints = [n for n in robot_joint_names if n not in joint_names_in_motion_data]
+        if missing_joints:
+            raise ValueError(
+                f"Motion file '{motion_file}' is missing joints required by the robot config: "
+                f"{missing_joints}. "
+                f"Motion file has {len(joint_names_in_motion_data)} joints: {joint_names_in_motion_data}. "
+                f"Robot expects {len(robot_joint_names)} joints: {robot_joint_names}. "
+                f"Check that the motion file was converted with the correct --robot-config.robot-dof setting."
+            )
+
         body_indexes = self._get_index_of_a_in_b(robot_body_names, body_names_in_motion_data, device)
         joint_indexes = self._get_index_of_a_in_b(robot_joint_names, joint_names_in_motion_data, device)
 
@@ -57,8 +69,14 @@ class MotionLoader:
         return torch.tensor(indexes, dtype=torch.long, device=device)
 
     def _load_data_from_motion_npz(self, motion_file: str, device: str) -> tuple[list[str], list[str]]:
-        with cached_open(motion_file, "rb") as f, np.load(f) as data:
+        with cached_open(motion_file, "rb") as f, np.load(f, allow_pickle=True) as data:
             self.fps = data["fps"]
+
+            # Validate pipeline metadata (if present)
+            if "_meta_robot_dof" in data:
+                meta_dof = int(data["_meta_robot_dof"])
+                meta_name = str(data["_meta_robot_name"])
+                logger.info(f"Motion file metadata: robot={meta_name}, dof={meta_dof}")
 
             body_names = data["body_names"].tolist()
             joint_names = data["joint_names"].tolist()

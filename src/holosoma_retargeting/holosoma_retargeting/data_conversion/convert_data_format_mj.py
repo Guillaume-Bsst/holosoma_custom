@@ -138,9 +138,31 @@ class MotionLoader:
     def _load_motion(self):
         """Loads the motion from the csv file."""
         if self.motion_file.endswith(".npz"):
-            data = np.load(self.motion_file)
+            data = np.load(self.motion_file, allow_pickle=True)
             self.input_fps = round(1 / data.get("fps", 1 / self.input_fps))
             motion = torch.from_numpy(data["qpos"]).to(torch.float32)
+
+            # Validate DOF consistency with retargeting metadata (if present)
+            if "_meta_robot_dof" in data:
+                source_dof = int(data["_meta_robot_dof"])
+                if source_dof != self.robot_dof:
+                    raise ValueError(
+                        f"DOF mismatch: input file '{self.motion_file}' was retargeted with "
+                        f"{source_dof} DOF, but data conversion is configured for {self.robot_dof} DOF. "
+                        f"Use --robot-config.robot-dof {source_dof} to match."
+                    )
+
+            # Validate qpos shape: expect 7 (root) + robot_dof [+ 7 (object)]
+            qpos_cols = motion.shape[1]
+            expected_no_obj = 7 + self.robot_dof
+            expected_with_obj = 7 + self.robot_dof + 7
+            if qpos_cols not in (expected_no_obj, expected_with_obj):
+                raise ValueError(
+                    f"qpos shape mismatch in '{self.motion_file}': got {qpos_cols} columns, "
+                    f"expected {expected_no_obj} (no object) or {expected_with_obj} (with object) "
+                    f"for {self.robot_dof} DOF. "
+                    f"Check --robot-config.robot-dof and --has_dynamic_object flags."
+                )
         else:
             raise ValueError("Unsupported motion file format. Use .csv or .npz.")
 
@@ -582,6 +604,13 @@ def run_simulator(args_cli: DataConversionConfig):
                 log["joint_names"] = joint_names[1:]  # remove the root free joint name
 
             log["body_names"] = body_names
+
+            # Pipeline metadata (for traceability and inter-step validation)
+            log["_meta_robot_name"] = constants.ROBOT_NAME
+            log["_meta_robot_dof"] = robot_dof
+            log["_meta_robot_urdf"] = constants.ROBOT_URDF_FILE
+            log["_meta_source_file"] = args_cli.input_file
+            log["_meta_step"] = "data_conversion"
 
             if args_cli.output_name is None:
                 raise ValueError("output_name cannot be None")

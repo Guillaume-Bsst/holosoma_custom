@@ -437,6 +437,11 @@ class InteractionMeshRetargeter:
             human_joints=human_joint_motions,
             fps=30,
             cost=cost,
+            # Pipeline metadata (for traceability and inter-step validation)
+            _meta_robot_name=self.task_constants.ROBOT_NAME,
+            _meta_robot_dof=self.task_constants.ROBOT_DOF,
+            _meta_robot_urdf=self.task_constants.ROBOT_URDF_FILE,
+            _meta_step="retargeting",
         )
         print("Saving results to path:", dest_res_path)
 
