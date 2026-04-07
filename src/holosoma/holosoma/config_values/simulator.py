@@ -59,7 +59,7 @@ isaacsim = SimulatorConfig(
 # MuJoCo physics tuned for humanoid WBT (SOTA: PHC, PULSE, ExBody2).
 # Defaults are MuJoCo defaults: integrator=Euler, cone=pyramidal.
 _mujoco_wbt_physics = MujocoPhysicsConfig(
-    integrator="implicitfast",  # default: "Euler" — implicitfast is more stable with stiff PD + contacts
+    integrator="Euler",  # default: "Euler" — implicitfast is more stable with stiff PD + contacts
     cone="elliptic",  # default: "pyramidal" — elliptic is more accurate for friction
 )
 
