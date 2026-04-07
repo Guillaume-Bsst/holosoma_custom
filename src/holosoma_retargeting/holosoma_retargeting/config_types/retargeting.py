@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Literal
 
 from holosoma_retargeting.config_types.data_type import MotionDataConfig
-from holosoma_retargeting.config_types.retargeter import RetargeterConfig
+from holosoma_retargeting.config_types.retargeter import RetargeterConfig  # backward compat alias
+from holosoma_retargeting.config_types.retargeters.gmr import GMRRetargeterConfig
+from holosoma_retargeting.config_types.retargeters.omniretarget import OmniRetargeterConfig
 from holosoma_retargeting.config_types.robot import RobotConfig
 from holosoma_retargeting.config_types.task import TaskConfig
 
@@ -17,11 +19,27 @@ class RetargetingConfig:
     """Top-level retargeting configuration used by the Tyro CLI.
 
     This combines all configuration types needed for retargeting.
+
+    Algorithm selection
+    -------------------
+    Set ``retargeter_method`` to choose the algorithm:
+        - ``"omniretarget"`` (default): Interaction Mesh + SQP. Supports all task types.
+        - ``"gmr"``: IK-based (mink/mujoco). Supports robot_only only.
+
+    Each method has its own nested config namespace:
+        - OmniRetarget params: ``--retargeter.<param>``
+        - GMR params:          ``--gmr.<param>``
     """
 
     # --- Task type selection ---
     task_type: Literal["robot_only", "object_interaction", "climbing"] = "object_interaction"
     """Type of retargeting task."""
+
+    # --- Algorithm selection ---
+    retargeter_method: Literal["omniretarget", "gmr"] = "omniretarget"
+    """Retargeting algorithm to use.
+    'omniretarget': Interaction Mesh + SQP (original, all task types).
+    'gmr': IK-based General Motion Retargeting (robot_only only)."""
 
     # --- top-level run knobs ---
     robot: str = "g1"
@@ -60,9 +78,15 @@ class RetargetingConfig:
     """Task-specific configuration (nested - can override ground_size, surface_weight_threshold, etc.
     via --task-config.ground-size)."""
 
-    retargeter: RetargeterConfig = field(default_factory=RetargeterConfig)
-    """Retargeter configuration (nested - can override q_a_init_idx, activate_joint_limits, etc.
-    via --retargeter.q-a-init-idx)."""
+    retargeter: OmniRetargeterConfig = field(default_factory=OmniRetargeterConfig)
+    """OmniRetarget (Interaction Mesh + SQP) configuration.
+    Only used when retargeter_method='omniretarget'.
+    Override via --retargeter.<param>."""
+
+    gmr: GMRRetargeterConfig = field(default_factory=GMRRetargeterConfig)
+    """GMR (IK-based) configuration.
+    Only used when retargeter_method='gmr'.
+    Override via --gmr.<param>."""
 
 
 @dataclass

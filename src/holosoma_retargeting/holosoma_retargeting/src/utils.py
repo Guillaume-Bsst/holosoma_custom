@@ -207,7 +207,7 @@ def weighted_surface_sampling_by_face_normal(mesh, sample_count, weight_func, se
 
 def preprocess_motion_data(
     human_joints,
-    retargeter,
+    demo_joints_or_retargeter,
     foot_names,
     scale=0.714,
     mat_height=0.1,
@@ -218,18 +218,27 @@ def preprocess_motion_data(
 
     Args:
         human_joints (np.ndarray): Human joint positions.
-        object_poses (np.ndarray): Object poses.
-        retargeter: Retargeting object with smplh_joint2idx attribute.
+        demo_joints_or_retargeter: Either a list[str] of joint names (preferred,
+            from MotionDataConfig.resolved_demo_joints) or a legacy retargeter
+            object with a .demo_joints attribute (backward-compatible).
+        foot_names: [left_toe_name, right_toe_name].
         scale (float): Scaling factor.
-        normalize_height (bool): Whether to normalize human joint heights.
+        mat_height (float): Mat height offset.
+        object_poses (np.ndarray): Optional object poses.
 
     Returns:
         tuple: (human_joints_scaled, object_poses_scaled, object_moving_frame_idx).
     """
+    # Accept either a list of joint names or a legacy retargeter object
+    if isinstance(demo_joints_or_retargeter, list):
+        demo_joints = demo_joints_or_retargeter
+    else:
+        demo_joints = demo_joints_or_retargeter.demo_joints
+
     # Normalize human joint heights
     toe_indices = [
-        retargeter.demo_joints.index(foot_names[0]),
-        retargeter.demo_joints.index(foot_names[1]),
+        demo_joints.index(foot_names[0]),
+        demo_joints.index(foot_names[1]),
     ]
     z_min = human_joints[:, toe_indices, 2].min()
     if z_min >= mat_height:
