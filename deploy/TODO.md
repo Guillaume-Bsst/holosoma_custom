@@ -37,3 +37,5 @@ g1_29dof_wbt_observation_w_object = ObservationManagerCfg(
     },
 )
 Augmenter l'history
+
+Pour la refonte du pipeline, il faudrait faire un 4eme src: holosoma_data. On mettrait dedans les datas les urdf et xml des robots, objet et terrains qui sont partagés par les 3 autres src. On met aussi tout ce qui est le résultats de chaque étape du pipeline, donc les fichier sources du retargeting (OMOMO, SFU, climb), leur résultats retargetés, les data converties. Ce dossier regroupera donc tous les fichiers transvers à holosoma.
