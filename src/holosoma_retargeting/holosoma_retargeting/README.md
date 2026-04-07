@@ -4,6 +4,28 @@ This repository provides tools for retargeting human motion data to humanoid rob
 
 **Data Requirements**: The retargeting pipeline requires motion data in world joint positions. For custom data, you need to prepare world joint positions in shape `(T, J, 3)` where T is the number of frames and J is the number of joints, and modify `demo_joints` and `joints_mapping` defined in `config_types/data_type.py`.
 
+## DOF Mode Selection (27-DOF / 29-DOF)
+
+The retargeting pipeline supports both **29-DOF** (default) and **27-DOF** modes for the G1 robot. The 27-DOF mode removes the `waist_roll_joint` and `waist_pitch_joint`, keeping only `waist_yaw_joint` in the torso.
+
+To select the DOF mode, use `--robot-config.robot-dof`:
+
+```bash
+# 29-DOF (default, can be omitted)
+python examples/robot_retarget.py --robot-config.robot-dof 29 ...
+
+# 27-DOF
+python examples/robot_retarget.py --robot-config.robot-dof 27 ...
+```
+
+This flag automatically adjusts:
+- The robot URDF/XML model (`g1_29dof.urdf` or `g1_27dof.urdf`)
+- Joint limit bounds (manual lower/upper bounds)
+- Cost weights (waist joints)
+- Default output directory (e.g. `demo_results/g1_27dof/...` vs `demo_results/g1_29dof/...`)
+
+The flag works with all commands: single retargeting, batch processing, evaluation, and data conversion.
+
 ## Single Sequence Motion Retargeting
 
 ```bash
@@ -15,6 +37,9 @@ python examples/robot_retarget.py --data_path demo_data/OMOMO_new --task-type ob
 
 # Climbing
 python examples/robot_retarget.py --data_path demo_data/climb --task-type climbing --task-name mocap_climb_seq_0 --data_format mocap --robot-config.robot-urdf-file models/g1/g1_29dof_spherehand.urdf --retargeter.debug --retargeter.visualize
+
+# 27-DOF example (robot-only)
+python examples/robot_retarget.py --data_path demo_data/OMOMO_new --task-type robot_only --task-name sub3_largebox_003 --data_format smplh --robot-config.robot-dof 27 --retargeter.debug --retargeter.visualize
 ```
 
 **Note**: Add `--augmentation` to run sequences with augmentation. You must first run the original sequence before adding augmentation.
@@ -133,8 +158,10 @@ python examples/parallel_robot_retarget.py --data-dir demo_data/amass_smplx_proc
 
 ## Check Visualizations of Saved Retargeting Results
 
+Use `--robot_urdf` to select the correct URDF matching the DOF mode used during retargeting (`g1_29dof.urdf` or `g1_27dof.urdf`).
+
 ```bash
-# Visualize object-interaction results
+# Visualize object-interaction results (29-DOF)
 python viser_player.py --robot_urdf models/g1/g1_29dof.urdf \
     --object_urdf models/largebox/largebox.urdf \
     --qpos_npz demo_results_parallel/g1/object_interaction/omomo/sub3_largebox_003_original.npz
@@ -148,8 +175,12 @@ python viser_player.py --robot_urdf models/g1/g1_29dof_spherehand.urdf \
     --object_urdf demo_data/climb/mocap_climb_seq_0/multi_boxes_scaled_0.74_0.74_0.89.urdf \
     --qpos_npz demo_results_parallel/g1/climbing/mocap_climb/mocap_climb_seq_0_z_scale_1.2.npz
 
-# Visualize robot only results
+# Visualize robot only results (29-DOF)
 python viser_player.py --robot_urdf models/g1/g1_29dof.urdf \
+    --qpos_npz demo_results_parallel/g1/robot_only/omomo/sub3_largebox_003_original.npz
+
+# Visualize robot only results (27-DOF)
+python viser_player.py --robot_urdf models/g1/g1_27dof.urdf \
     --qpos_npz demo_results_parallel/g1/robot_only/omomo/sub3_largebox_003_original.npz
 
 # Visualize LAFAN robot only results

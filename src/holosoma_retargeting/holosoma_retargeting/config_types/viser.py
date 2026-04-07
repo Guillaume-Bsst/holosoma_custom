@@ -17,7 +17,7 @@ class ViserConfig:
     """Path to .npz file with qpos data."""
 
     robot_urdf: str = "models/g1/g1_29dof.urdf"
-    """Path to robot URDF file."""
+    """Path to robot URDF file (e.g., models/g1/g1_27dof.urdf for 27-DOF mode)."""
 
     object_urdf: str | None = None
     """Path to object URDF file (optional)."""

@@ -50,9 +50,9 @@ from holosoma_retargeting.src.utils import (  # type: ignore[import-not-found]  
 
 # Override save directories for parallel processing (use demo_results_parallel instead of demo_results)
 PARALLEL_SAVE_DIRS = {
-    "robot_only": "demo_results_parallel/{robot}/robot_only/omomo",
-    "object_interaction": "demo_results_parallel/{robot}/object_interaction/omomo",
-    "climbing": "demo_results_parallel/{robot}/climbing/mocap_climb",
+    "robot_only": "demo_results_parallel/{robot_name}/robot_only/omomo",
+    "object_interaction": "demo_results_parallel/{robot_name}/object_interaction/omomo",
+    "climbing": "demo_results_parallel/{robot_name}/climbing/mocap_climb",
 }
 
 
@@ -309,10 +309,13 @@ def main(cfg: ParallelRetargetingConfig) -> None:
     """
     robot = cfg.robot
     task_type = cfg.task_type
+    robot_name = cfg.robot_config.ROBOT_NAME  # e.g. "g1_29dof" or "g1_27dof"
 
     # Set defaults based on task type
     data_format: str = cfg.data_format or DEFAULT_DATA_FORMATS[task_type]
-    save_dir = cfg.save_dir if cfg.save_dir is not None else Path(PARALLEL_SAVE_DIRS[task_type].format(robot=robot))
+    save_dir = cfg.save_dir if cfg.save_dir is not None else Path(
+        PARALLEL_SAVE_DIRS[task_type].format(robot_name=robot_name)
+    )
     data_dir = cfg.data_dir
 
     os.makedirs(save_dir, exist_ok=True)

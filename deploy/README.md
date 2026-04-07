@@ -8,7 +8,7 @@ SLURM job scripts, and usage guides.
 | File | Contents |
 |---|---|
 | [INSTALL.md](INSTALL.md) | What to install depending on your use case (local conda or Apptainer) |
-| [RETARGETING.md](RETARGETING.md) | How to run retargeting and data conversion |
+| [RETARGETING.md](RETARGETING.md) | How to run retargeting and data conversion (27-DOF / 29-DOF) |
 | [TRAINING.md](TRAINING.md) | How to run training jobs (MJWarp, IsaacSim, multi-GPU, with objects) |
 | [EVALUATION.md](EVALUATION.md) | How to evaluate a trained checkpoint and export to ONNX |
 | [INFERENCE.md](INFERENCE.md) | How to run inference on the real robot or in simulation (MuJoCo, PyBullet) |
