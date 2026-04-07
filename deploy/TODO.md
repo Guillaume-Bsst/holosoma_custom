@@ -4,7 +4,7 @@
 
 ## 1. Stance foot constraint too restrictive on rotational motions
 
-**Motion:** `SFU_0018_0018_DanceTurns001_stageii` (SFU / AMASS, SMPL-X)
+Motion: `SFU_0018_0018_DanceTurns001_stageii` (SFU / AMASS, SMPL-X)
 
 ```bash
 source /root/.holosoma_deps/miniconda3/etc/profile.d/conda.sh && conda activate hsretargeting
@@ -20,22 +20,21 @@ python examples/robot_retarget.py \
     --retargeter.visualize
 ```
 
-**Problem:** The robot needs to turn on itself with sometimes 1, sometimes 2 feet on the ground. The stance foot constraint locks a foot in both rotation and translation, which freezes the entire leg and makes the motion collapse into nonsense.
+Problem: The robot needs to turn on itself with sometimes 1, sometimes 2 feet on the ground. The stance foot constraint locks a foot in both rotation and translation, which freezes the entire leg and makes the motion collapse into nonsense.
 
-**Lead:** Relax the stance foot constraint to allow rotational/acrobatic motions. The risk is introducing foot skating and ground penetration. To compensate, implement a **DynaRetarget**-style post-processing layer (or concurrent layer) that specifically corrects foot skating / ground penetration without blocking acrobatic movements.
+Lead: Relax the stance foot constraint to allow rotational/acrobatic motions. The risk is introducing foot skating and ground penetration. To compensate, implement a **DynaRetarget**-style post-processing layer (or concurrent layer) that specifically corrects foot skating / ground penetration without blocking acrobatic movements.
 
+## 2. Pipeline Refactoring: Centralized Data Management (holosoma_data)
 
-g1_29dof_wbt_observation_w_object = ObservationManagerCfg(
-    groups={
-        "actor_obs": actor_obs_shared,
-        "critic_obs": ObsGroupCfg(
-            concatenate=True,
-            enable_noise=False,
-            history_length=1,
-            terms=critic_obs_w_object_terms,
-        ),
-    },
-)
-Augmenter l'history
+Goal: Create a 4th source module named holosoma_data to centralize all cross-cutting assets shared between the other three source directories.
 
-Pour la refonte du pipeline, il faudrait faire un 4eme src: holosoma_data. On mettrait dedans les datas les urdf et xml des robots, objet et terrains qui sont partagés par les 3 autres src. On met aussi tout ce qui est le résultats de chaque étape du pipeline, donc les fichier sources du retargeting (OMOMO, SFU, climb), leur résultats retargetés, les data converties. Ce dossier regroupera donc tous les fichiers transvers à holosoma.
+Content of holosoma_data:
+- Shared Assets: URDF and XML files for robots, objects, and environments/terrains.
+- Source Datasets: Raw files used for retargeting (e.g., OMOMO, SFU, climb).
+- Pipeline Outputs: Intermediate and final results from each stage, including retargeted motions and converted data formats.
+
+Benefit: This refactoring will eliminate redundancy and provide a single source of truth for all data-heavy files used throughout the Holosoma ecosystem.
+
+## 3. Upstream Synchronization
+
+Task: Merge the latest improvements and bug fixes from the main holosoma repository (upstream) into the current working branch.
