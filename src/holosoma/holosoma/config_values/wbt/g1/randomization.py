@@ -25,6 +25,16 @@ robot_state_dr_at_setup = {
             "enabled": True,
         },
     ),
+    "randomize_robot_mass_startup": RandomizationTermCfg(
+        func="holosoma.managers.randomization.terms.locomotion:randomize_mass_startup",
+        params={
+            "enable_link_mass": True,
+            "link_mass_range": [0.95, 1.05],
+            "enable_base_mass": True,
+            "added_mass_range": [-1.0, 2.0],
+            "enabled": True,
+        },
+    ),
 }
 
 object_state_dr_at_setup = {
@@ -73,16 +83,16 @@ base_setup_terms = {
         params={
             "kp_range": [0.9, 1.1],
             "kd_range": [0.9, 1.1],
-            "rfi_lim_range": [1.0, 1.0],
+            "rfi_lim_range": [0.5, 1.5],
             "enable_pd_gain": True,
-            "enable_rfi_lim": False,
+            "enable_rfi_lim": True,
         },
     ),
     "setup_action_delay_buffers": RandomizationTermCfg(
         func="holosoma.managers.randomization.terms.locomotion:setup_action_delay_buffers",
         params={
-            "ctrl_delay_step_range": [0, 1],
-            "enabled": False,
+            "ctrl_delay_step_range": [0, 2],
+            "enabled": True,
         },
     ),
     **robot_state_dr_at_setup,

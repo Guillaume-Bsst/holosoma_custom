@@ -5,7 +5,7 @@ from holosoma.config_types.observation import ObservationManagerCfg, ObsGroupCfg
 actor_obs_shared = ObsGroupCfg(
     concatenate=True,
     enable_noise=True,
-    history_length=1,
+    history_length=5,
     terms={
         "motion_command": ObsTermCfg(
             func="holosoma.managers.observation.terms.wbt:motion_command",
@@ -20,12 +20,12 @@ actor_obs_shared = ObsGroupCfg(
         "base_ang_vel": ObsTermCfg(
             func="holosoma.managers.observation.terms.wbt:base_ang_vel",
             scale=1.0,
-            noise=0.2,
+            noise=0.05,
         ),
         "dof_pos": ObsTermCfg(
             func="holosoma.managers.observation.terms.wbt:dof_pos",
             scale=1.0,
-            noise=0.01,
+            noise=0.02,
         ),
         "dof_vel": ObsTermCfg(
             func="holosoma.managers.observation.terms.wbt:dof_vel",
@@ -36,6 +36,11 @@ actor_obs_shared = ObsGroupCfg(
             func="holosoma.managers.observation.terms.wbt:actions",
             scale=1.0,
             noise=0.0,
+        ),
+        "projected_gravity": ObsTermCfg(
+            func="holosoma.managers.observation.terms.wbt:projected_gravity",
+            scale=1.0,
+            noise=0.02,
         ),
     },
 )
@@ -88,6 +93,11 @@ critic_obs_shared_terms = {
     ),
     "actions": ObsTermCfg(
         func="holosoma.managers.observation.terms.wbt:actions",
+        scale=1.0,
+        noise=0.0,
+    ),
+    "projected_gravity": ObsTermCfg(
+        func="holosoma.managers.observation.terms.wbt:projected_gravity",
         scale=1.0,
         noise=0.0,
     ),
