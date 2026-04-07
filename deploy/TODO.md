@@ -38,3 +38,6 @@ Benefit: This refactoring will eliminate redundancy and provide a single source 
 ## 3. Upstream Synchronization
 
 Task: Merge the latest improvements and bug fixes from the main holosoma repository (upstream) into the current working branch.
+
+## GOAL :
+I need to make the retargeting pipeline modular, meaning I should be able to call different calculation methods. After that, I will implement GMR to verify the baseline. Then, I’ll solve GMR while incorporating OmniRetarget constraints. Next, I will add the contact distance to the objective function (minimized function). I'll also account for the object frame's position and orientation. Following this, I will address the foot-skating constraints. Finally, I’ll solve the entire problem using LOIK.
