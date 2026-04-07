@@ -10,6 +10,7 @@ from holosoma_retargeting.config_types.data_type import MotionDataConfig
 from holosoma_retargeting.config_types.retargeter import RetargeterConfig  # backward compat alias
 from holosoma_retargeting.config_types.retargeters.gmr import GMRRetargeterConfig
 from holosoma_retargeting.config_types.retargeters.omniretarget import OmniRetargeterConfig
+from holosoma_retargeting.config_types.retargeters.test import TestRetargeterConfig
 from holosoma_retargeting.config_types.robot import RobotConfig
 from holosoma_retargeting.config_types.task import TaskConfig
 
@@ -36,10 +37,11 @@ class RetargetingConfig:
     """Type of retargeting task."""
 
     # --- Algorithm selection ---
-    retargeter_method: Literal["omniretarget", "gmr"] = "omniretarget"
+    retargeter_method: Literal["omniretarget", "gmr", "test"] = "omniretarget"
     """Retargeting algorithm to use.
     'omniretarget': Interaction Mesh + SQP (original, all task types).
-    'gmr': IK-based General Motion Retargeting (robot_only only)."""
+    'gmr':          IK-based General Motion Retargeting (robot_only only).
+    'test':         Native mink IK in holosoma (robot_only, no GMR dependency)."""
 
     # --- top-level run knobs ---
     robot: str = "g1"
@@ -87,6 +89,11 @@ class RetargetingConfig:
     """GMR (IK-based) configuration.
     Only used when retargeter_method='gmr'.
     Override via --gmr.<param>."""
+
+    test: TestRetargeterConfig = field(default_factory=TestRetargeterConfig)
+    """Test (native mink IK) configuration.
+    Only used when retargeter_method='test'.
+    Override via --test.<param>."""
 
 
 @dataclass

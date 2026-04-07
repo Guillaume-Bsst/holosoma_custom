@@ -458,6 +458,8 @@ def _get_retargeter_cfg(cfg: RetargetingConfig, method: str):
         return cfg.retargeter
     if method == "gmr":
         return cfg.gmr
+    if method == "test":
+        return cfg.test
     raise ValueError(
         f"Unknown retargeter method '{method}'. "
         f"Add a cfg field and a branch here in pipeline/run.py._get_retargeter_cfg()."

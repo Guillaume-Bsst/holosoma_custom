@@ -19,6 +19,7 @@ from holosoma_retargeting.retargeters.base import BaseRetargeter
 RETARGETER_REGISTRY: dict[str, str] = {
     "omniretarget": "holosoma_retargeting.retargeters.omniretarget.OmniRetargeter",
     "gmr": "holosoma_retargeting.retargeters.gmr.GMRRetargeter",
+    "test": "holosoma_retargeting.retargeters.test.TestRetargeter",
 }
 
 
