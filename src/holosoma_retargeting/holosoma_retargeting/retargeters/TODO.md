@@ -53,7 +53,7 @@ Documents/
 **Done when:**
 ```bash
 python examples/robot_retarget.py --retargeter-method test \
-    --data_path data_utils/SFU/0005 \
+    --data_path holosoma_data/datasets/SFU_raw/0005 \
     --task-name 0005_2FeetJump001_stageii \
     --data_format smplx --gmr.src_human smplx
 ```
@@ -68,12 +68,12 @@ Run both methods on the same sequence and compare qpos frame by frame:
 ```bash
 # GMR
 python examples/robot_retarget.py --retargeter-method gmr \
-    --data_path data_utils/SFU/0005 --task-name 0005_2FeetJump001_stageii \
+    --data_path holosoma_data/datasets/SFU_raw/0005 --task-name 0005_2FeetJump001_stageii \
     --data_format smplx --gmr.src_human smplx
 
 # Test
 python examples/robot_retarget.py --retargeter-method test \
-    --data_path data_utils/SFU/0005 --task-name 0005_2FeetJump001_stageii \
+    --data_path holosoma_data/datasets/SFU_raw/0005 --task-name 0005_2FeetJump001_stageii \
     --data_format smplx
 
 # Compare

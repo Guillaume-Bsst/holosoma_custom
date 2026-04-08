@@ -1049,13 +1049,13 @@ class InteractionMeshRetargeter:
             p_W = (p_WB + R_WB @ p_body).astype(np.float64).reshape(3, 1)
 
         # 3) J_v: translational Jacobian wrt generalized velocities (3 x nv)
-        Jp = np.zeros((3, self.robot_model.nv), dtype=np.float64, order="C")
+        Jv = np.zeros((3, self.robot_model.nv), dtype=np.float64, order="C")
         Jr = np.zeros((3, self.robot_model.nv), dtype=np.float64, order="C")
-        mujoco.mj_jac(self.robot_model, self.robot_data, Jp, Jr, p_W, int(body_idx))  # Jp = J_v
+        mujoco.mj_jac(self.robot_model, self.robot_data, Jv, Jr, p_W, int(body_idx))  
 
         T = self._build_transform_qdot_to_qvel_fast()
 
-        return Jp @ T
+        return Jv @ T
 
     def _calc_manipulator_jacobians(
         self,

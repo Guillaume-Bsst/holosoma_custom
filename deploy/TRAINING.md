@@ -121,7 +121,9 @@ apptainer exec --nv --writable-tmpfs \
     xvfb-run -a python src/holosoma/holosoma/train_agent.py \
         exp:g1-29dof-wbt-mjwarp \
         logger:wandb \
-        --logger.video.enabled=False
+        --logger.video.enabled=False \
+        --command.setup-terms.motion-command.params.motion-config.motion-file=src/holosoma/holosoma/data/motions/g1_29dof/whole_body_tracking/sub3_largebox_003_mj.npz \
+        --training.num-envs=4096
 "
 ```
 
@@ -180,7 +182,9 @@ apptainer exec --nv \
     xvfb-run -a python src/holosoma/holosoma/train_agent.py \
         exp:g1-29dof-wbt-isaacsim \
         logger:wandb \
-        --logger.video.enabled=False
+        --logger.video.enabled=False \
+        --command.setup-terms.motion-command.params.motion-config.motion-file=src/holosoma/holosoma/data/motions/g1_29dof/whole_body_tracking/sub3_largebox_003_mj.npz \
+        --training.num-envs=4096
 "
 ```
 

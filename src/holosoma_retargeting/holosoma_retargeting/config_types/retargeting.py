@@ -14,6 +14,12 @@ from holosoma_retargeting.config_types.retargeters.test import TestRetargeterCon
 from holosoma_retargeting.config_types.robot import RobotConfig
 from holosoma_retargeting.config_types.task import TaskConfig
 
+try:
+    from holosoma_data import DATASETS_DIR as _hd_datasets_dir
+    _DEFAULT_DATA_PATH = _hd_datasets_dir / "OMOMO"
+except ImportError:
+    _DEFAULT_DATA_PATH = Path("demo_data/OMOMO_new")
+
 
 @dataclass
 class RetargetingConfig:
@@ -55,7 +61,7 @@ class RetargetingConfig:
     task_name: str = "sub3_largebox_003"
     """Name of the task/sequence."""
 
-    data_path: Path = Path("demo_data/OMOMO_new")
+    data_path: Path = field(default_factory=lambda: _DEFAULT_DATA_PATH)
     """Path to data directory."""
 
     save_dir: Path | None = None
@@ -105,7 +111,7 @@ class ParallelRetargetingConfig(RetargetingConfig):
     """
 
     # Parallel processing specific fields
-    data_dir: Path = Path("demo_data/OMOMO_new")
+    data_dir: Path = field(default_factory=lambda: _DEFAULT_DATA_PATH)
     """Directory containing input data files for parallel processing.
     This overrides data_path from RetargetingConfig when processing multiple files."""
 

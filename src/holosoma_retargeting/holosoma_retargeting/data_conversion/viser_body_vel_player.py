@@ -301,6 +301,6 @@ if __name__ == "__main__":
 
 """
 python viser_body_vel_player.py \
---npz_path ../converted_res/robot_only/sub3_largebox_003_mj.npz \
---robot_urdf ../models/g1/g1_29dof.urdf
+--npz_path holosoma_data/pipeline/converted/robot_only/sub3_largebox_003_mj_fps50.npz \
+--robot_urdf holosoma_data/robots/g1/g1_29dof_retargeting.urdf
 """

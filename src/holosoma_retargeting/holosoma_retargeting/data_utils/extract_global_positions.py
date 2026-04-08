@@ -3,12 +3,18 @@
 Simple script to extract global positions from LAFAN dataset BVH files.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 import tyro
 from lafan1 import extract, utils  # type: ignore[import-not-found]
+
+try:
+    from holosoma_data import DATASETS_DIR as _hd_datasets_dir
+    _DEFAULT_OUTPUT_DIR = str(_hd_datasets_dir / "lafan")
+except ImportError:
+    _DEFAULT_OUTPUT_DIR = "../demo_data/lafan"
 
 
 def extract_global_positions(bvh_file_path):
@@ -57,7 +63,7 @@ class Config:
     """Configuration for extracting global positions from BVH files."""
 
     input_dir: str = "./lafan1/lafan"
-    output_dir: str = "../demo_data/lafan"
+    output_dir: str = field(default_factory=lambda: _DEFAULT_OUTPUT_DIR)
 
 
 def main(cfg: Config):

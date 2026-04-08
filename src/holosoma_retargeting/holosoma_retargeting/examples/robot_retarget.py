@@ -5,7 +5,7 @@ Usage examples:
     # OmniRetarget (default) — robot_only with SMPLH data
     python examples/robot_retarget.py \
         --task-type robot_only \
-        --data_path demo_data/OMOMO_new \
+        --data_path holosoma_data/datasets/OMOMO \
         --task-name sub3_largebox_003 \
         --data_format smplh \
         --retargeter.debug
@@ -13,7 +13,7 @@ Usage examples:
     # OmniRetarget — object interaction
     python examples/robot_retarget.py \
         --task-type object_interaction \
-        --data_path demo_data/OMOMO_new \
+        --data_path holosoma_data/datasets/OMOMO \
         --task-name sub3_largebox_003 \
         --data_format smplh \
         --retargeter.visualize
@@ -22,7 +22,7 @@ Usage examples:
     python examples/robot_retarget.py \
         --retargeter-method gmr \
         --task-type robot_only \
-        --data_path demo_data/smplx \
+        --data_path holosoma_data/datasets/SFU_demo \
         --task-name my_sequence \
         --data_format smplx \
         --gmr.src_human smplx
@@ -31,7 +31,7 @@ Usage examples:
     python examples/robot_retarget.py \
         --robot-config.robot-dof 27 \
         --task-type robot_only \
-        --data_path demo_data/OMOMO_new \
+        --data_path holosoma_data/datasets/OMOMO \
         --task-name sub3_largebox_003
 
 See holosoma_retargeting/pipeline/run.py for the full pipeline logic.

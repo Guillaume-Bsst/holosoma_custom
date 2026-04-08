@@ -7,7 +7,7 @@ Usage examples:
 
     # OmniRetarget — robot_only (OMOMO / SMPLH)
     python examples/parallel_robot_retarget.py \
-        --data-dir demo_data/OMOMO_new \
+        --data-dir holosoma_data/datasets/OMOMO \
         --task-type robot_only \
         --data_format smplh \
         --save_dir demo_results_parallel/g1/robot_only/omomo \
@@ -15,7 +15,7 @@ Usage examples:
 
     # OmniRetarget — object interaction
     python examples/parallel_robot_retarget.py \
-        --data-dir demo_data/OMOMO_new \
+        --data-dir holosoma_data/datasets/OMOMO \
         --task-type object_interaction \
         --data_format smplh \
         --save_dir demo_results_parallel/g1/object_interaction/omomo \
@@ -24,7 +24,7 @@ Usage examples:
     # GMR — robot_only (SMPLX)
     python examples/parallel_robot_retarget.py \
         --retargeter-method gmr \
-        --data-dir demo_data/smplx \
+        --data-dir holosoma_data/datasets/SFU_demo \
         --task-type robot_only \
         --data_format smplx
 

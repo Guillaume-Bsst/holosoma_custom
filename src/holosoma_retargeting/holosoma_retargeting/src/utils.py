@@ -17,6 +17,12 @@ from jinja2 import Template
 from scipy.spatial import Delaunay  # type: ignore[import-untyped]
 from scipy.spatial.transform import Rotation as R  # type: ignore[import-untyped]  # noqa: N817
 
+try:
+    from holosoma_data import DATASETS_DIR as _hd_datasets_dir
+    _HEIGHT_DICT_PATH = str(_hd_datasets_dir / "height_dict.pkl")
+except ImportError:
+    _HEIGHT_DICT_PATH = "demo_data/height_dict.pkl"
+
 
 def load_intermimic_data(file_path):
     """
@@ -37,7 +43,7 @@ def load_intermimic_data(file_path):
 
 def calculate_scale_factor(task_name, robot_height):
     """Calculate scale factor based on human height."""
-    with open("demo_data/height_dict.pkl", "rb") as f:
+    with open(_HEIGHT_DICT_PATH, "rb") as f:
         height_dict = pickle.load(f)
     sub_name = task_name.split("_")[0]
     human_height = height_dict[sub_name]
