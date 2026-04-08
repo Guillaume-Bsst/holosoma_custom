@@ -26,10 +26,24 @@ data-conversion command. This automatically adjusts:
 
 ## 1. Retargeting
 
-### Robot-only (OMOMO)
+The pipeline supports three retargeting algorithms, selected via `--retargeter-method`:
+
+| Method | Flag | Task types | Description |
+| --- | --- | --- | --- |
+| `omniretarget` | *(default)* | robot_only, object_interaction, climbing | Interaction Mesh + SQP |
+| `gmr` | `--retargeter-method gmr` | robot_only | IK-based (mink/mujoco, requires GMR library) |
+| `test` | `--retargeter-method test` | robot_only | Native mink IK in holosoma (no GMR dependency) |
+
+Each algorithm has its own nested config namespace:
+
+- OmniRetarget params: `--retargeter.<param>`
+- GMR params: `--gmr.<param>`
+- Test params: `--test.<param>`
+
+### Robot-only (OMOMO) — OmniRetarget
 
 ```bash
-source source scripts/source_retargeting_setup.sh
+source scripts/source_retargeting_setup.sh
 cd src/holosoma_retargeting/holosoma_retargeting
 python examples/robot_retarget.py \
     --data_path demo_data/OMOMO_new \
@@ -40,10 +54,10 @@ python examples/robot_retarget.py \
     --retargeter.visualize
 ```
 
-### Object interaction (OMOMO)
+### Object interaction (OMOMO) — OmniRetarget
 
 ```bash
-source source scripts/source_retargeting_setup.sh
+source scripts/source_retargeting_setup.sh
 cd src/holosoma_retargeting/holosoma_retargeting
 python examples/robot_retarget.py \
     --data_path demo_data/OMOMO_new \
@@ -54,10 +68,10 @@ python examples/robot_retarget.py \
     --retargeter.visualize
 ```
 
-### Robot-only (SFU / AMASS, SMPL-X format)
+### Robot-only (SFU / AMASS, SMPL-X format) — OmniRetarget
 
 ```bash
-source source scripts/source_retargeting_setup.sh
+source scripts/source_retargeting_setup.sh
 cd src/holosoma_retargeting/holosoma_retargeting
 python examples/robot_retarget.py \
     --data_path demo_data/SFU/ \
@@ -70,10 +84,42 @@ python examples/robot_retarget.py \
     --retargeter.visualize
 ```
 
-### Climbing
+### Robot-only (SMPL-X format) — GMR
+
+Requires the GMR library. Uses IK-based retargeting with a two-pass damped least squares solver.
 
 ```bash
-source source scripts/source_retargeting_setup.sh
+source scripts/source_retargeting_setup.sh
+cd src/holosoma_retargeting/holosoma_retargeting
+python examples/robot_retarget.py \
+    --retargeter-method gmr \
+    --task-type robot_only \
+    --data_path demo_data/smplx \
+    --task-name my_sequence \
+    --data_format smplx \
+    --gmr.src_human smplx
+```
+
+### Robot-only — Test (native mink IK)
+
+Drop-in replacement for GMR without the external library dependency. Work in progress toward
+GMR parity — see `retargeters/TODO.md` for remaining steps.
+
+```bash
+source scripts/source_retargeting_setup.sh
+cd src/holosoma_retargeting/holosoma_retargeting
+python examples/robot_retarget.py \
+    --retargeter-method test \
+    --task-type robot_only \
+    --data_path demo_data/OMOMO_new \
+    --task-name sub3_largebox_003 \
+    --data_format smplh
+```
+
+### Climbing — OmniRetarget
+
+```bash
+source scripts/source_retargeting_setup.sh
 cd src/holosoma_retargeting/holosoma_retargeting
 python examples/robot_retarget.py \
     --data_path demo_data/climb \
@@ -91,7 +137,7 @@ Any of the above commands can be run in 27-DOF mode by adding `--robot-config.ro
 
 ```bash
 # Robot-only, 27-DOF
-source source scripts/source_retargeting_setup.sh
+source scripts/source_retargeting_setup.sh
 cd src/holosoma_retargeting/holosoma_retargeting
 python examples/robot_retarget.py \
     --data_path demo_data/OMOMO_new \
@@ -112,6 +158,16 @@ python examples/robot_retarget.py \
     --retargeter.debug \
     --retargeter.visualize
 ```
+
+### Adding a new retargeting algorithm
+
+1. Create `retargeters/my_method.py` with a class inheriting `BaseRetargeter`
+2. Create `config_types/retargeters/my_method.py` with a frozen dataclass config
+3. Register in `retargeters/registry.py`: `RETARGETER_REGISTRY["my_method"] = "...MyMethodRetargeter"`
+4. Add `my_method: MyMethodConfig` to `RetargetingConfig` in `config_types/retargeting.py`
+5. Extend `retargeter_method: Literal[..., "my_method"]`
+
+See `retargeters/base.py` for the `BaseRetargeter` interface.
 
 ---
 
