@@ -47,6 +47,24 @@ def robot_urdf(robot_type: str, dof: int, variant: str = "retargeting") -> Path:
     return ROBOTS_DIR / robot_type / f"{robot_type}_{dof}dof_{variant}.urdf"
 
 
+def policy_path(policy_type: str, robot: str, name: str) -> Path:
+    """Return the path to a trained policy file.
+
+    Args:
+        policy_type: e.g. "loco", "wbt"
+        robot: e.g. "g1_29dof"
+        name: filename without extension, e.g. "fastsac_g1_29dof"
+
+    Returns:
+        Absolute path to the .onnx file.
+
+    Example:
+        >>> policy_path("loco", "g1_29dof", "fastsac_g1_29dof")
+        PosixPath('.../holosoma_data/policies/loco/g1_29dof/fastsac_g1_29dof.onnx')
+    """
+    return POLICIES_DIR / policy_type / robot / f"{name}.onnx"
+
+
 def object_urdf(object_name: str) -> Path:
     """Return the canonical URDF path for an object.
 

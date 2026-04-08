@@ -18,7 +18,7 @@ try:
     from holosoma_data import DATASETS_DIR as _hd_datasets_dir
     _DEFAULT_DATA_PATH = _hd_datasets_dir / "OMOMO"
 except ImportError:
-    _DEFAULT_DATA_PATH = Path("demo_data/OMOMO_new")
+    _DEFAULT_DATA_PATH = Path("demo_data/OMOMO")
 
 
 @dataclass
