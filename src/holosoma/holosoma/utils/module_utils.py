@@ -9,15 +9,14 @@ def get_holosoma_root() -> str:
 
 
 def get_holosoma_data_root() -> str:
-    """Return the absolute path to the holosoma_data package root.
-
-    Falls back to the legacy holosoma/data directory if holosoma_data is not installed.
-    """
+    """Return the absolute path to the holosoma_data package root."""
     try:
         from holosoma_data import HOLOSOMA_DATA_ROOT
         return str(HOLOSOMA_DATA_ROOT)
     except ImportError:
-        return os.path.join(get_holosoma_root(), "data")
+        raise RuntimeError(
+            "holosoma_data is not installed. Run: pip install -e src/holosoma_data"
+        )
 
 
 def resolve_asset_root(asset_root: str) -> str:
@@ -25,7 +24,7 @@ def resolve_asset_root(asset_root: str) -> str:
 
     Supported aliases:
       @holosoma_data  -> holosoma_data package root  (canonical)
-      @holosoma       -> legacy holosoma package root (backwards-compat)
+      @holosoma       -> holosoma package root (for non-data assets)
 
     Args:
         asset_root: raw asset_root string from a config.

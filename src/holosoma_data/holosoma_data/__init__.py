@@ -1,11 +1,11 @@
 """holosoma_data — centralized data store for all Holosoma shared assets.
 
 Provides a single source of truth for:
-  - robots/       : URDF + mesh files for all supported robots
-  - objects/      : URDF + mesh files for interactive objects
-  - environments/ : terrain XML and multi-box assets
-  - datasets/     : raw source motion datasets (OMOMO, SFU, climb, ...)
-  - pipeline/     : outputs from retargeting and data conversion steps
+  - robots/    : URDF + mesh files for all supported robots
+  - objects/   : URDF + mesh files for interactive objects
+  - datasets/  : raw source motion datasets (OMOMO, SFU, climb, ...)
+  - policies/  : trained ONNX policy weights (loco, wbt, ...)
+  - pipeline/  : outputs from retargeting and data conversion steps
     - retargeted/ : .npz files output by holosoma_retargeting
     - converted/  : .npz files output by data_conversion step
 """
@@ -20,8 +20,8 @@ HOLOSOMA_DATA_ROOT: Path = Path(__file__).resolve().parent
 
 ROBOTS_DIR: Path = HOLOSOMA_DATA_ROOT / "robots"
 OBJECTS_DIR: Path = HOLOSOMA_DATA_ROOT / "objects"
-ENVIRONMENTS_DIR: Path = HOLOSOMA_DATA_ROOT / "environments"
 DATASETS_DIR: Path = HOLOSOMA_DATA_ROOT / "datasets"
+POLICIES_DIR: Path = HOLOSOMA_DATA_ROOT / "policies"
 PIPELINE_DIR: Path = HOLOSOMA_DATA_ROOT / "pipeline"
 RETARGETED_DIR: Path = PIPELINE_DIR / "retargeted"
 CONVERTED_DIR: Path = PIPELINE_DIR / "converted"

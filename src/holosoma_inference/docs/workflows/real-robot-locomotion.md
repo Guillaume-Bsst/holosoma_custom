@@ -56,7 +56,7 @@ Look for the interface with IP `192.168.123.224`. Common names:
 ```bash
 source scripts/source_inference_setup.sh
 python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:g1-29dof-loco \
-    --task.model-path src/holosoma_inference/holosoma_inference/models/loco/g1_29dof/fastsac_g1_29dof.onnx \
+    --task.model-path src/holosoma_data/holosoma_data/policies/loco/g1_29dof/fastsac_g1_29dof.onnx \
     --task.use-joystick \
     --task.interface eth0
 ```
@@ -124,7 +124,7 @@ Look for the interface with IP `192.168.10.10`. Common names:
 ```bash
 source scripts/source_inference_setup.sh
 python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:t1-29dof-loco \
-    --task.model-path src/holosoma_inference/holosoma_inference/models/loco/t1_29dof/ppo_t1_29dof.onnx \
+    --task.model-path src/holosoma_data/holosoma_data/policies/loco/t1_29dof/ppo_t1_29dof.onnx \
     --task.use-joystick \
     --task.interface eth0
 ```

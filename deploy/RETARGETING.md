@@ -46,7 +46,7 @@ Each algorithm has its own nested config namespace:
 source scripts/source_retargeting_setup.sh
 cd src/holosoma_retargeting/holosoma_retargeting
 python examples/robot_retarget.py \
-    --data_path demo_data/OMOMO_new \
+    --data_path holosoma_data/datasets/OMOMO \
     --task-type robot_only \
     --task-name sub3_largebox_003 \
     --data_format smplh \
@@ -60,7 +60,7 @@ python examples/robot_retarget.py \
 source scripts/source_retargeting_setup.sh
 cd src/holosoma_retargeting/holosoma_retargeting
 python examples/robot_retarget.py \
-    --data_path demo_data/OMOMO_new \
+    --data_path holosoma_data/datasets/OMOMO \
     --task-type object_interaction \
     --task-name sub3_largebox_003 \
     --data_format smplh \
@@ -74,7 +74,7 @@ python examples/robot_retarget.py \
 source scripts/source_retargeting_setup.sh
 cd src/holosoma_retargeting/holosoma_retargeting
 python examples/robot_retarget.py \
-    --data_path demo_data/SFU/ \
+    --data_path holosoma_data/datasets/SFU_demo/ \
     --task-type robot_only \
     --task-name SFU_0005_0005_2FeetJump001_stageii \
     --data_format smplx \
@@ -104,7 +104,7 @@ cd src/holosoma_retargeting/holosoma_retargeting
 python examples/robot_retarget.py \
     --retargeter-method gmr \
     --task-type robot_only \
-    --data_path demo_data/smplx \
+    --data_path holosoma_data/datasets/SFU_demo \
     --task-name my_sequence \
     --data_format smplx \
     --gmr.src_human smplx
@@ -121,7 +121,7 @@ cd src/holosoma_retargeting/holosoma_retargeting
 python examples/robot_retarget.py \
     --retargeter-method test \
     --task-type robot_only \
-    --data_path demo_data/OMOMO_new \
+    --data_path holosoma_data/datasets/OMOMO \
     --task-name sub3_largebox_003 \
     --data_format smplh
 ```
@@ -132,7 +132,7 @@ python examples/robot_retarget.py \
 source scripts/source_retargeting_setup.sh
 cd src/holosoma_retargeting/holosoma_retargeting
 python examples/robot_retarget.py \
-    --data_path demo_data/climb \
+    --data_path holosoma_data/datasets/climb \
     --task-type climbing \
     --task-name mocap_climb_seq_0 \
     --data_format mocap \
@@ -150,7 +150,7 @@ Any of the above commands can be run in 27-DOF mode by adding `--robot-config.ro
 source scripts/source_retargeting_setup.sh
 cd src/holosoma_retargeting/holosoma_retargeting
 python examples/robot_retarget.py \
-    --data_path demo_data/OMOMO_new \
+    --data_path holosoma_data/datasets/OMOMO \
     --task-type robot_only \
     --task-name sub3_largebox_003 \
     --data_format smplh \
@@ -160,7 +160,7 @@ python examples/robot_retarget.py \
 
 # Object interaction, 27-DOF
 python examples/robot_retarget.py \
-    --data_path demo_data/OMOMO_new \
+    --data_path holosoma_data/datasets/OMOMO \
     --task-type object_interaction \
     --task-name sub3_largebox_003 \
     --data_format smplh \

@@ -3,7 +3,6 @@ __pycache__
 *.zip
 .vscode
 *.pt
-*.pkl
 *.egg-info
 data/
 .DS_Store
@@ -28,5 +27,4 @@ data_utils/lafan
 data_utils/models_smplx_v1_1
 data_utils/human_body_prior
 
-*.sh
 *.bvh

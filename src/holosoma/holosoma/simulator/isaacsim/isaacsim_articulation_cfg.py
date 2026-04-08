@@ -5,7 +5,7 @@ from isaaclab.assets.articulation import ArticulationCfg
 ARTICULATION_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
         # usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/H1/h1.usd",
-        usd_path="holosoma/data/robots/h1/h1.usd",
+        # usd_path="holosoma_data/robots/h1/h1.usd",  # TODO: add H1 USD to holosoma_data
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,

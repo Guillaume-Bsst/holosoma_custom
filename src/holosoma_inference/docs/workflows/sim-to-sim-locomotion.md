@@ -51,7 +51,7 @@ In another terminal, run the policy inference:
 ```bash
 source scripts/source_inference_setup.sh
 python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:g1-29dof-loco \
-    --task.model-path src/holosoma_inference/holosoma_inference/models/loco/g1_29dof/fastsac_g1_29dof.onnx \
+    --task.model-path src/holosoma_data/holosoma_data/policies/loco/g1_29dof/fastsac_g1_29dof.onnx \
     --task.no-use-joystick \
     --task.interface lo
 ```
@@ -60,7 +60,7 @@ python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:g1-29d
 ```bash
 source scripts/source_inference_setup.sh
 python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:g1-29dof-loco \
-    --task.model-path src/holosoma_inference/holosoma_inference/models/loco/g1_29dof/fastsac_g1_29dof.onnx \
+    --task.model-path src/holosoma_data/holosoma_data/policies/loco/g1_29dof/fastsac_g1_29dof.onnx \
     --task.use-joystick \
     --task.interface lo
 ```
@@ -116,7 +116,7 @@ In another terminal, run the policy inference:
 ```bash
 source scripts/source_inference_setup.sh
 python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:t1-29dof-loco \
-    --task.model-path src/holosoma_inference/holosoma_inference/models/loco/t1_29dof/ppo_t1_29dof.onnx \
+    --task.model-path src/holosoma_data/holosoma_data/policies/loco/t1_29dof/ppo_t1_29dof.onnx \
     --task.no-use-joystick \
     --task.interface lo
 ```
@@ -125,7 +125,7 @@ python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:t1-29d
 ```bash
 source scripts/source_inference_setup.sh
 python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:t1-29dof-loco \
-    --task.model-path src/holosoma_inference/holosoma_inference/models/loco/t1_29dof/ppo_t1_29dof.onnx \
+    --task.model-path src/holosoma_data/holosoma_data/policies/loco/t1_29dof/ppo_t1_29dof.onnx \
     --task.use-joystick \
     --task.interface lo
 ```

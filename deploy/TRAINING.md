@@ -122,7 +122,7 @@ apptainer exec --nv --writable-tmpfs \
         exp:g1-29dof-wbt-mjwarp \
         logger:wandb \
         --logger.video.enabled=False \
-        --command.setup-terms.motion-command.params.motion-config.motion-file=src/holosoma/holosoma/data/motions/g1_29dof/whole_body_tracking/sub3_largebox_003_mj.npz \
+        --command.setup-terms.motion-command.params.motion-config.motion-file=src/holosoma_data/holosoma_data/pipeline/converted/g1_29dof/whole_body_tracking/sub3_largebox_003_mj.npz \
         --training.num-envs=4096
 "
 ```
@@ -167,7 +167,7 @@ apptainer exec --nv \
     --bind $SCRATCH/isaac_pkg_cache:/root/.holosoma_deps/miniconda3/envs/hssim/lib/python3.11/site-packages/isaacsim/kit/cache \
     --bind $SCRATCH/isaac_pkg_data:/root/.holosoma_deps/miniconda3/envs/hssim/lib/python3.11/site-packages/isaacsim/kit/data \
     --bind $SCRATCH/isaac_pkg_logs:/root/.holosoma_deps/miniconda3/envs/hssim/lib/python3.11/site-packages/isaacsim/kit/logs \
-    --bind $SCRATCH/holosoma_converted_robots:/workspace/holosoma/src/holosoma/holosoma/data/robots/converted_rank0 \
+    --bind $SCRATCH/holosoma_converted_robots:/workspace/holosoma/src/holosoma_data/holosoma_data/robots/g1/converted_rank0 \
     deploy/cluster/holosoma.sif bash -c "
     export HTTP_PROXY=\$http_proxy && \
     export HTTPS_PROXY=\$https_proxy && \
@@ -183,7 +183,7 @@ apptainer exec --nv \
         exp:g1-29dof-wbt-isaacsim \
         logger:wandb \
         --logger.video.enabled=False \
-        --command.setup-terms.motion-command.params.motion-config.motion-file=src/holosoma/holosoma/data/motions/g1_29dof/whole_body_tracking/sub3_largebox_003_mj.npz \
+        --command.setup-terms.motion-command.params.motion-config.motion-file=src/holosoma_data/holosoma_data/pipeline/converted/g1_29dof/whole_body_tracking/sub3_largebox_003_mj.npz \
         --training.num-envs=4096
 "
 ```

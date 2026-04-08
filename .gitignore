@@ -2,7 +2,6 @@
 *.py[cod]
 # Log files
 *.log
-*.onnx
 *.pt
 *.err
 *.out
@@ -29,9 +28,8 @@ scratch_space/
 tmp_space/
 holosoma_logs/
 
-# Isaacsim Converted Files
-src/holosoma/holosoma/data/robots/converted/
-src/holosoma/holosoma/data/robots/converted_rank*/
+# Isaacsim Converted Files (cache generated at runtime)
+src/holosoma_data/holosoma_data/robots/g1/converted_rank*/
 
 # other
 *.egg-info

@@ -54,7 +54,7 @@ Look for the interface with IP `192.168.123.224`. Common names:
 ```bash
 source scripts/source_inference_setup.sh
 python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:g1-29dof-wbt \
-    --task.model-path src/holosoma_inference/holosoma_inference/models/wbt/fastsac_g1_29dof_dancing.onnx \
+    --task.model-path src/holosoma_data/holosoma_data/policies/wbt/fastsac_g1_29dof_dancing.onnx \
     --task.use-joystick \
     --task.rl-rate 50 \
     --task.interface eth0

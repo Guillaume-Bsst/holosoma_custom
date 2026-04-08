@@ -159,7 +159,7 @@ By default, control gains (kp/kd) are loaded from ONNX model metadata. You can o
 
 ```bash
 python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:g1-29dof-loco \
-    --task.model-path src/holosoma_inference/holosoma_inference/models/loco/g1_29dof/fastsac_g1_29dof.onnx \
+    --task.model-path src/holosoma_data/holosoma_data/policies/loco/g1_29dof/fastsac_g1_29dof.onnx \
     --robot.motor-kp 40.2 99.1 40.2 99.1 28.5 28.5 40.2 99.1 40.2 99.1 28.5 28.5 40.2 28.5 28.5 14.3 14.3 14.3 14.3 14.3 16.8 16.8 14.3 14.3 14.3 14.3 14.3 16.8 16.8 \
     --robot.motor-kd 2.6 6.3 2.6 6.3 1.8 1.8 2.6 6.3 2.6 6.3 1.8 1.8 2.6 1.8 1.8 0.9 0.9 0.9 0.9 0.9 1.1 1.1 0.9 0.9 0.9 0.9 0.9 1.1 1.1
 ```
@@ -168,7 +168,7 @@ python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:g1-29d
 
 ```bash
 python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:t1-29dof-loco \
-    --task.model-path src/holosoma_inference/holosoma_inference/models/loco/t1_29dof/ppo_t1_29dof.onnx \
+    --task.model-path src/holosoma_data/holosoma_data/policies/loco/t1_29dof/ppo_t1_29dof.onnx \
     --robot.motor-kp 5.0 5.0 20.0 20.0 20.0 20.0 20.0 20.0 20.0 20.0 20.0 20.0 20.0 20.0 20.0 20.0 200.0 200.0 200.0 200.0 200.0 50.0 50.0 200.0 200.0 200.0 200.0 50.0 50.0 \
     --robot.motor-kd 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 5.0 5.0 5.0 5.0 5.0 3.0 3.0 5.0 5.0 5.0 5.0 3.0 3.0
 ```

@@ -2,13 +2,7 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
-
-if sys.version_info >= (3, 9):
-    from importlib.resources import files
-else:
-    from importlib_resources import files  # type: ignore[import-not-found]
 
 
 def resolve_data_file_path(file_path: str) -> str:
@@ -18,9 +12,8 @@ def resolve_data_file_path(file_path: str) -> str:
     Handles multiple path formats:
     1. S3 paths: "s3://bucket/path/to/file.npz" -> return as-is
     2. holosoma_data paths: "holosoma_data/..." -> resolved via holosoma_data package
-    3. Package data paths: "holosoma/data/.../file.npz" -> resolved via importlib.resources
-    4. Absolute paths: "/path/to/file.npz" -> returned as-is
-    5. Relative paths: "./data/file.npz" or "../data/file.npz" -> resolved relative to CWD
+    3. Absolute paths: "/path/to/file.npz" -> returned as-is
+    4. Relative paths: "./data/file.npz" or "../data/file.npz" -> resolved relative to CWD
 
     Args:
         file_path: The path to resolve
@@ -34,10 +27,10 @@ def resolve_data_file_path(file_path: str) -> str:
         >>> print(path)
         /path/to/holosoma_data/holosoma_data/pipeline/retargeted/...
 
-        >>> # Legacy holosoma package data
-        >>> path = resolve_data_file_path("holosoma/data/motions/g1_29dof/whole_body_tracking/motion_crawl_slope.npz")
+        >>> # holosoma_data pipeline converted (canonical)
+        >>> path = resolve_data_file_path("holosoma_data/pipeline/converted/g1_29dof/whole_body_tracking/motion_crawl_slope.npz")
         >>> print(path)
-        /path/to/installed/holosoma/data/motions/g1_29dof/whole_body_tracking/motion_crawl_slope.npz
+        /path/to/holosoma_data/holosoma_data/pipeline/converted/g1_29dof/whole_body_tracking/motion_crawl_slope.npz
 
         >>> # User's custom file (absolute)
         >>> path = resolve_data_file_path("/home/user/my_motions/custom.npz")
@@ -57,17 +50,11 @@ def resolve_data_file_path(file_path: str) -> str:
         except ImportError:
             pass  # fall through to absolute/relative resolution
 
-    # 3. Legacy holosoma package data paths
-    if file_path.startswith("holosoma/data"):
-        suffix = file_path[13:].lstrip("/")  # Remove "holosoma/data" and leading slashes
-        base = files("holosoma.data")
-        return str(base / suffix) if suffix else str(base)
-
-    # 4. If it's an absolute path, return as-is
+    # 3. If it's an absolute path, return as-is
     path_obj = Path(file_path)
     if path_obj.is_absolute():
         return file_path
 
-    # 5. Otherwise, resolve relative path to absolute (relative to CWD)
+    # 4. Otherwise, resolve relative path to absolute (relative to CWD)
     resolved = path_obj.resolve()
     return str(resolved)
