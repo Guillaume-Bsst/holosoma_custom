@@ -25,6 +25,14 @@ data_utils/lafan1
 data_utils/models_smplx_v1_1
 data_utils/human_body_prior
 
+# Raw and converted motion data
+demo_data/OMOMO_new/
+demo_data/OMOMO_new_smplx/
+demo_data/smplx/
+demo_data/SFU/
+demo_data/climb/
+demo_data/height_dict.pkl
+
 converted_res/
 *.sh
 *.bvh

@@ -86,7 +86,17 @@ python examples/robot_retarget.py \
 
 ### Robot-only (SMPL-X format) — GMR
 
-Requires the GMR library. Uses IK-based retargeting with a two-pass damped least squares solver.
+Requires the GMR library (expected at `../GMR`, alongside the `holosoma/` folder).
+Install it once with:
+
+```bash
+pip install -e ../GMR
+```
+
+Uses IK-based retargeting with a two-pass damped least squares solver.
+
+GMR natively supports `smplx` and `bvh` formats only. To use SMPLH data (InterMimic `.pt` files)
+with GMR, convert it first — see [SMPLH → SMPLX conversion](#smplh--smplx-conversion-for-gmr) below.
 
 ```bash
 source scripts/source_retargeting_setup.sh
@@ -96,6 +106,45 @@ python examples/robot_retarget.py \
     --task-type robot_only \
     --data_path demo_data/smplx \
     --task-name my_sequence \
+    --data_format smplx \
+    --gmr.src_human smplx
+```
+
+#### SMPLH → SMPLX conversion (for GMR)
+
+SMPLH InterMimic `.pt` files must be converted to `.npz` before being passed to GMR.
+The converter remaps the 52-joint SMPLH skeleton to the 22-joint SMPLX layout used by the pipeline.
+
+```bash
+cd src/holosoma_retargeting/holosoma_retargeting
+
+# Single file — height from height_dict.pkl
+python data_utils/convert_smplh_to_smplx.py \
+    --input demo_data/OMOMO_new/sub3_largebox_003.pt \
+    --output demo_data/smplx/sub3_largebox_003.npz \
+    --height-dict demo_data/height_dict.pkl
+
+# Single file — explicit height
+python data_utils/convert_smplh_to_smplx.py \
+    --input demo_data/OMOMO_new/sub3_largebox_003.pt \
+    --output demo_data/smplx/sub3_largebox_003.npz \
+    --height 1.75
+
+# Batch — convert all .pt files in a folder
+python data_utils/convert_smplh_to_smplx.py \
+    --input demo_data/OMOMO_new/ \
+    --output demo_data/OMOMO_new_smplx/ \
+    --height-dict demo_data/height_dict.pkl
+```
+
+Then run GMR on the converted data:
+
+```bash
+python examples/robot_retarget.py \
+    --retargeter-method gmr \
+    --task-type robot_only \
+    --data_path demo_data/OMOMO_new_smplx \
+    --task-name sub3_largebox_003 \
     --data_format smplx \
     --gmr.src_human smplx
 ```
@@ -158,6 +207,38 @@ python examples/robot_retarget.py \
     --retargeter.debug \
     --retargeter.visualize
 ```
+
+### Visualizing results (viser_player)
+
+All retargeting outputs (OmniRetarget, GMR, Test) produce a `.npz` file with a `qpos` key.
+The `viser_player.py` script replays any result in the browser via [viser](https://viser.studio).
+
+```bash
+cd src/holosoma_retargeting/holosoma_retargeting
+
+# OmniRetarget result (object pose included in qpos)
+python viser_player.py \
+    --qpos-npz demo_results/g1/robot_only/omomo/sub3_largebox_003.npz \
+    --robot-urdf models/g1/g1_29dof.urdf
+
+# GMR result (no object in qpos)
+python viser_player.py \
+    --qpos-npz /home/gbesset/Documents/holosoma/src/holosoma/holosoma/data/pipeline/g1_29dof/gmr/sub3_largebox_003/retargeted.npz \
+    --robot-urdf models/g1/g1_29dof.urdf \
+    --no-assume-object-in-qpos
+
+# 27-DOF
+python viser_player.py \
+    --qpos-npz demo_results/g1_27dof/robot_only/omomo/sub3_largebox_003.npz \
+    --robot-urdf models/g1/g1_27dof.urdf
+```
+
+Then open the URL printed in the terminal (e.g. `http://localhost:8080`) in a browser.
+
+> OmniRetarget also supports an inline mode: add `--retargeter.visualize` to the retargeting
+> command to open the viewer directly at the end of the computation.
+
+---
 
 ### Adding a new retargeting algorithm
 

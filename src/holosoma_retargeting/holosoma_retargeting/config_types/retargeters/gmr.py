@@ -4,7 +4,7 @@ GMR uses an IK-based solver (mink/mujoco) and supports robot_only tasks.
 See: https://github.com/YanjieZe/GMR
 
 Requires GMR to be installed:
-    pip install -e /path/to/GMR
+    pip install -e ../GMR
 """
 
 from __future__ import annotations
