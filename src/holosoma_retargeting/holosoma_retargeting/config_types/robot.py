@@ -7,6 +7,12 @@ from typing import Mapping, TypedDict
 
 import numpy as np
 
+try:
+    from holosoma_data import robot_urdf as _hd_robot_urdf
+    _HOLOSOMA_DATA_AVAILABLE = True
+except ImportError:
+    _HOLOSOMA_DATA_AVAILABLE = False
+
 
 # Default values per robot type
 class RobotDefaults(TypedDict):
@@ -118,9 +124,17 @@ class RobotConfig:
     )
 
     def _robot_urdf_file(self) -> str:
-        """Get robot URDF file path."""
+        """Get robot URDF file path.
+
+        Resolution order:
+          1. Explicit override (robot_urdf_file)
+          2. holosoma_data package (canonical, absolute path)
+          3. Fallback: relative models/ path (legacy, CWD-dependent)
+        """
         if self.robot_urdf_file is not None:
             return self.robot_urdf_file
+        if _HOLOSOMA_DATA_AVAILABLE:
+            return str(_hd_robot_urdf(self.robot_type, self.ROBOT_DOF))
         return f"models/{self.robot_type}/{self.robot_type}_{self.ROBOT_DOF}dof.urdf"
 
     ROBOT_URDF_FILE = property(_robot_urdf_file, doc="Get robot URDF file path.")

@@ -124,7 +124,7 @@ _DOF_CONFIGS = {
             asset=replace(robot.g1_29dof_w_object.asset, enable_self_collisions=True),
             object=replace(
                 robot.g1_29dof_w_object.object,
-                object_urdf_path="holosoma/data/motions/g1_29dof/whole_body_tracking/objects_largebox.urdf",
+                object_urdf_path="holosoma_data/pipeline/converted/g1_29dof/whole_body_tracking/objects_largebox.urdf",
             ),
             init_state=replace(robot.g1_29dof_w_object.init_state, pos=[0.0, 0.0, 0.76]),
         ),
@@ -144,7 +144,7 @@ _DOF_CONFIGS = {
             asset=replace(robot.g1_27dof_w_object.asset, enable_self_collisions=True),
             object=replace(
                 robot.g1_27dof_w_object.object,
-                object_urdf_path="holosoma/data/motions/g1_29dof/whole_body_tracking/objects_largebox.urdf",
+                object_urdf_path="holosoma_data/pipeline/converted/g1_29dof/whole_body_tracking/objects_largebox.urdf",
             ),
             init_state=replace(robot.g1_27dof_w_object.init_state, pos=[0.0, 0.0, 0.76]),
         ),

@@ -17,6 +17,14 @@ import tyro
 src_root = Path(__file__).resolve().parents[2]
 if str(src_root) not in sys.path:
     sys.path.insert(0, str(src_root))
+try:
+    from holosoma_data import OBJECTS_DIR as _hd_objects_dir, ROBOTS_DIR as _hd_robots_dir
+    _OBJECTS_DIR = str(_hd_objects_dir)
+    _ROBOTS_DIR = str(_hd_robots_dir)
+except ImportError:
+    _OBJECTS_DIR = "models"
+    _ROBOTS_DIR = "models"
+
 from holosoma_retargeting.config_types.data_conversion import DataConversionConfig  # noqa: E402
 from holosoma_retargeting.config_types.data_type import MotionDataConfig  # noqa: E402
 from holosoma_retargeting.config_types.robot import RobotConfig  # noqa: E402
@@ -62,12 +70,12 @@ def create_task_constants(
         namespace.OBJECT_NAME = object_name
 
     if namespace.OBJECT_NAME != "ground":
-        namespace.OBJECT_URDF_FILE = f"models/{namespace.OBJECT_NAME}/{namespace.OBJECT_NAME}.urdf"
-        namespace.OBJECT_MESH_FILE = f"models/{namespace.OBJECT_NAME}/{namespace.OBJECT_NAME}.obj"
-        namespace.OBJECT_URDF_TEMPLATE = f"models/templates/{namespace.OBJECT_NAME}.urdf.jinja"
+        namespace.OBJECT_URDF_FILE = f"{_OBJECTS_DIR}/{namespace.OBJECT_NAME}/{namespace.OBJECT_NAME}.urdf"
+        namespace.OBJECT_MESH_FILE = f"{_OBJECTS_DIR}/{namespace.OBJECT_NAME}/{namespace.OBJECT_NAME}.obj"
+        namespace.OBJECT_URDF_TEMPLATE = f"{_ROBOTS_DIR}/templates/{namespace.OBJECT_NAME}.urdf.jinja"
         namespace.SCENE_XML_FILE = (
-            f"models/{robot_config.robot_type}/"
-            f"{robot_config.robot_type}_{namespace.ROBOT_DOF}dof_w_{namespace.OBJECT_NAME}.xml"
+            f"{_ROBOTS_DIR}/{robot_config.robot_type}/"
+            f"{robot_config.robot_type}_{namespace.ROBOT_DOF}dof_w_{namespace.OBJECT_NAME}_retargeting.xml"
         )
     else:
         namespace.OBJECT_URDF_FILE = namespace.ROBOT_URDF_FILE

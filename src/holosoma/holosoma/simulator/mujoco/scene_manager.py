@@ -13,7 +13,7 @@ from loguru import logger
 from holosoma.config_types.robot import RobotConfig
 from holosoma.config_types.simulator import MujocoXMLFilterCfg, RigidObjectConfig, SimulatorConfig
 from holosoma.managers.terrain.base import TerrainTermBase
-from holosoma.utils.module_utils import get_holosoma_root
+from holosoma.utils.module_utils import get_holosoma_root, resolve_asset_root
 
 
 class MujocoSceneManager:
@@ -355,8 +355,8 @@ class MujocoSceneManager:
             Namespace prefix for robot elements (default: "robot_").
         """
         asset_root = robot_config.asset.asset_root
-        if asset_root.startswith("@holosoma/"):
-            asset_root = asset_root.replace("@holosoma", get_holosoma_root())
+        if asset_root.startswith("@holosoma"):  # handles @holosoma and @holosoma_data
+            asset_root = resolve_asset_root(asset_root)
         robot_xml_path = os.path.join(asset_root, robot_config.asset.xml_file)
 
         logger.info(f"Adding robot from: {robot_xml_path} with prefix: {prefix}")

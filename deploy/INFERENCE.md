@@ -120,7 +120,7 @@ source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATIO
 python src/holosoma_inference/holosoma_inference/run_policy.py \
     inference:g1-27dof-wbt \
     --robot.sdk-type=ros2 \
-    --task.model-path wandb://guibsst-inria/WholeBodyTracking/18ebpbd1/model_04000.onnx \
+    --task.model-path wandb://guibsst-inria/WholeBodyTracking/18ebpbd1/model_08000.onnx \
     --task.use-sim-time \
     --task.rl-rate 50
 ```

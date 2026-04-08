@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "holosoma-data"
+version = "0.1.0"
+description = "Centralized data store for all Holosoma shared assets (robots, objects, datasets, pipeline outputs)."
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["holosoma_data*"]
+
+[tool.setuptools.package-data]
+holosoma_data = [
+    "robots/**/*",
+    "objects/**/*",
+    "environments/**/*",
+]

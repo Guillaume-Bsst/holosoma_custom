@@ -10,7 +10,7 @@ import torch
 
 from holosoma.config_types.robot import RobotConfig
 from holosoma.envs.base_task.base_task import BaseTask
-from holosoma.utils.module_utils import get_holosoma_root
+from holosoma.utils.module_utils import get_holosoma_root, resolve_asset_root
 
 
 def _find_input_dim_from_module(module: torch.nn.Module) -> int:
@@ -295,8 +295,8 @@ def get_urdf_text_from_robot_config(robot_config: RobotConfig) -> tuple[str, str
         (urdf_file_path, urdf_str) - Path to URDF file and its contents
     """
     asset_root = robot_config.asset.asset_root
-    if asset_root.startswith("@holosoma/"):
-        asset_root = asset_root.replace("@holosoma", get_holosoma_root())
+    if asset_root.startswith("@holosoma"):  # handles @holosoma and @holosoma_data
+        asset_root = resolve_asset_root(asset_root)
 
     asset_file = robot_config.asset.urdf_file
     urdf_file_path = os.path.join(asset_root, asset_file)

@@ -95,8 +95,8 @@ pip install -e ../GMR
 
 Uses IK-based retargeting with a two-pass damped least squares solver.
 
-GMR natively supports `smplx` and `bvh` formats only. To use SMPLH data (InterMimic `.pt` files)
-with GMR, convert it first — see [SMPLH → SMPLX conversion](#smplh--smplx-conversion-for-gmr) below.
+GMR natively supports `smplx` and `bvh` formats only (not SMPLH/InterMimic `.pt` files).
+Use OmniRetarget for OMOMO data.
 
 ```bash
 source scripts/source_retargeting_setup.sh
@@ -106,45 +106,6 @@ python examples/robot_retarget.py \
     --task-type robot_only \
     --data_path demo_data/smplx \
     --task-name my_sequence \
-    --data_format smplx \
-    --gmr.src_human smplx
-```
-
-#### SMPLH → SMPLX conversion (for GMR)
-
-SMPLH InterMimic `.pt` files must be converted to `.npz` before being passed to GMR.
-The converter remaps the 52-joint SMPLH skeleton to the 22-joint SMPLX layout used by the pipeline.
-
-```bash
-cd src/holosoma_retargeting/holosoma_retargeting
-
-# Single file — height from height_dict.pkl
-python data_utils/convert_smplh_to_smplx.py \
-    --input demo_data/OMOMO_new/sub3_largebox_003.pt \
-    --output demo_data/smplx/sub3_largebox_003.npz \
-    --height-dict demo_data/height_dict.pkl
-
-# Single file — explicit height
-python data_utils/convert_smplh_to_smplx.py \
-    --input demo_data/OMOMO_new/sub3_largebox_003.pt \
-    --output demo_data/smplx/sub3_largebox_003.npz \
-    --height 1.75
-
-# Batch — convert all .pt files in a folder
-python data_utils/convert_smplh_to_smplx.py \
-    --input demo_data/OMOMO_new/ \
-    --output demo_data/OMOMO_new_smplx/ \
-    --height-dict demo_data/height_dict.pkl
-```
-
-Then run GMR on the converted data:
-
-```bash
-python examples/robot_retarget.py \
-    --retargeter-method gmr \
-    --task-type robot_only \
-    --data_path demo_data/OMOMO_new_smplx \
-    --task-name sub3_largebox_003 \
     --data_format smplx \
     --gmr.src_human smplx
 ```
@@ -175,7 +136,7 @@ python examples/robot_retarget.py \
     --task-type climbing \
     --task-name mocap_climb_seq_0 \
     --data_format mocap \
-    --robot-config.robot-urdf-file models/g1/g1_29dof_spherehand.urdf \
+    --robot-config.robot-urdf-file holosoma_data/robots/g1/g1_29dof_spherehand.urdf \
     --retargeter.debug \
     --retargeter.visualize
 ```
@@ -219,18 +180,18 @@ cd src/holosoma_retargeting/holosoma_retargeting
 # OmniRetarget result (object pose included in qpos)
 python viser_player.py \
     --qpos-npz demo_results/g1/robot_only/omomo/sub3_largebox_003.npz \
-    --robot-urdf models/g1/g1_29dof.urdf
+    --robot-urdf holosoma_data/robots/g1/g1_29dof.urdf
 
 # GMR result (no object in qpos)
 python viser_player.py \
-    --qpos-npz /home/gbesset/Documents/holosoma/src/holosoma/holosoma/data/pipeline/g1_29dof/gmr/sub3_largebox_003/retargeted.npz \
-    --robot-urdf models/g1/g1_29dof.urdf \
+    --qpos-npz holosoma_data/pipeline/retargeted/g1_29dof/gmr/sub3_largebox_003/retargeted.npz \
+    --robot-urdf holosoma_data/robots/g1/g1_29dof.urdf \
     --no-assume-object-in-qpos
 
 # 27-DOF
 python viser_player.py \
     --qpos-npz demo_results/g1_27dof/robot_only/omomo/sub3_largebox_003.npz \
-    --robot-urdf models/g1/g1_27dof.urdf
+    --robot-urdf holosoma_data/robots/g1/g1_27dof.urdf
 ```
 
 Then open the URL printed in the terminal (e.g. `http://localhost:8080`) in a browser.
@@ -262,7 +223,7 @@ cd src/holosoma_retargeting/holosoma_retargeting
 python data_conversion/convert_data_format_mj.py \
     --input_file ./demo_results/g1/robot_only/omomo/sub3_largebox_003.npz \
     --output_fps 50 \
-    --output_name converted_res/robot_only/sub3_largebox_003_mj_fps50.npz \
+    --output_name holosoma_data/pipeline/converted/robot_only/sub3_largebox_003_mj_fps50.npz \
     --data_format smplh \
     --object_name 'ground' \
     --once
@@ -276,7 +237,7 @@ cd src/holosoma_retargeting/holosoma_retargeting
 python data_conversion/convert_data_format_mj.py \
     --input_file ./demo_results/g1/object_interaction/omomo/sub3_largebox_003_original.npz \
     --output_fps 50 \
-    --output_name converted_res/object_interaction/sub3_largebox_003_mj_w_obj.npz \
+    --output_name holosoma_data/pipeline/converted/object_interaction/sub3_largebox_003_mj_w_obj.npz \
     --data_format smplh \
     --object_name 'largebox' \
     --has_dynamic_object \
@@ -294,7 +255,7 @@ cd src/holosoma_retargeting/holosoma_retargeting
 python data_conversion/convert_data_format_mj.py \
     --input_file ./demo_results/g1/robot_only/omomo/sub3_largebox_003.npz \
     --output_fps 50 \
-    --output_name converted_res/robot_only/sub3_largebox_003_27dof_mj_fps50.npz \
+    --output_name holosoma_data/pipeline/converted/robot_only/sub3_largebox_003_27dof_mj_fps50.npz \
     --data_format smplh \
     --object_name 'ground' \
     --robot-config.robot-dof 27 \
@@ -304,7 +265,7 @@ python data_conversion/convert_data_format_mj.py \
 python data_conversion/convert_data_format_mj.py \
     --input_file ./demo_results/g1/object_interaction/omomo/sub3_largebox_003_original.npz \
     --output_fps 50 \
-    --output_name converted_res/object_interaction/sub3_largebox_003_27dof_mj_w_obj.npz \
+    --output_name holosoma_data/pipeline/converted/object_interaction/sub3_largebox_003_27dof_mj_w_obj.npz \
     --data_format smplh \
     --object_name 'largebox' \
     --has_dynamic_object \

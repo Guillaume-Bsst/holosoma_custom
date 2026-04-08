@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+try:
+    from holosoma_data import robot_urdf as _hd_robot_urdf
+    _DEFAULT_ROBOT_URDF = str(_hd_robot_urdf("g1", 29))
+except ImportError:
+    _DEFAULT_ROBOT_URDF = "models/g1/g1_29dof.urdf"
+
 
 @dataclass(frozen=True)
 class ViserConfig:
@@ -16,8 +22,8 @@ class ViserConfig:
     qpos_npz: str = "rt_results/OMOMO_new/box_parallel/sub8_largebox_051_original.npz"
     """Path to .npz file with qpos data."""
 
-    robot_urdf: str = "models/g1/g1_29dof.urdf"
-    """Path to robot URDF file (e.g., models/g1/g1_27dof.urdf for 27-DOF mode)."""
+    robot_urdf: str = _DEFAULT_ROBOT_URDF
+    """Path to robot URDF file (e.g., path to g1_27dof.urdf for 27-DOF mode)."""
 
     object_urdf: str | None = None
     """Path to object URDF file (optional)."""

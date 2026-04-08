@@ -47,7 +47,14 @@ logger = logging.getLogger(__name__)
 TaskType = Literal["robot_only", "object_interaction", "climbing"]
 
 # Default save-dir template: <pipeline_data_dir>/<robot_name>/<method>/<task_name>/
-_PIPELINE_DATA_DIR = Path(__file__).resolve().parents[3] / "holosoma" / "holosoma" / "data" / "pipeline"
+try:
+    from holosoma_data import RETARGETED_DIR as _PIPELINE_DATA_DIR, OBJECTS_DIR as _OBJECTS_DIR, ROBOTS_DIR as _ROBOTS_DIR
+    _OBJECTS_DIR = str(_OBJECTS_DIR)
+    _ROBOTS_DIR = str(_ROBOTS_DIR)
+except ImportError:
+    _PIPELINE_DATA_DIR = Path(__file__).resolve().parents[3] / "holosoma" / "holosoma" / "data" / "pipeline"
+    _OBJECTS_DIR = "models"
+    _ROBOTS_DIR = "models"
 _SAVE_DIR_TEMPLATE = "{robot_name}/{retargeter_method}/{task_name}"
 
 # Constants for augmentation
@@ -100,9 +107,9 @@ def create_task_constants(
     elif task_type == "object_interaction":
         obj_name = task_config.object_name or "largebox"
         task_constants.OBJECT_NAME = obj_name
-        task_constants.OBJECT_URDF_FILE = f"models/{obj_name}/{obj_name}.urdf"
-        task_constants.OBJECT_MESH_FILE = f"models/{obj_name}/{obj_name}.obj"
-        task_constants.OBJECT_URDF_TEMPLATE = f"models/templates/{obj_name}.urdf.jinja"
+        task_constants.OBJECT_URDF_FILE = f"{_OBJECTS_DIR}/{obj_name}/{obj_name}.urdf"
+        task_constants.OBJECT_MESH_FILE = f"{_OBJECTS_DIR}/{obj_name}/{obj_name}.obj"
+        task_constants.OBJECT_URDF_TEMPLATE = f"{_ROBOTS_DIR}/templates/{obj_name}.urdf.jinja"
 
     elif task_type == "climbing":
         obj_name = task_config.object_name or "multi_boxes"

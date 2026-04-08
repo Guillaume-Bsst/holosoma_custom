@@ -1,0 +1,9 @@
+# Large binary datasets — not tracked, must be downloaded/generated locally
+holosoma_data/datasets/
+holosoma_data/pipeline/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/

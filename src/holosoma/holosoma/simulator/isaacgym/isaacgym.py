@@ -26,7 +26,7 @@ from holosoma.simulator.shared.virtual_gantry import (
 )
 from holosoma.simulator.types import ActorIndices, ActorNames, ActorPoses, ActorStates, EnvIds
 from holosoma.utils.draw import draw_line, draw_sphere
-from holosoma.utils.module_utils import get_holosoma_root
+from holosoma.utils.module_utils import get_holosoma_root, resolve_asset_root
 from holosoma.utils.safe_torch_import import torch
 from holosoma.utils.torch_utils import to_torch, torch_rand_float
 
@@ -232,8 +232,8 @@ class IsaacGym(BaseSimulator):
         self._load_scene()
 
         asset_root = self.robot_config.asset.asset_root
-        if asset_root.startswith("@holosoma/"):
-            asset_root = asset_root.replace("@holosoma", get_holosoma_root())
+        if asset_root.startswith("@holosoma"):  # handles @holosoma and @holosoma_data
+            asset_root = resolve_asset_root(asset_root)
 
         asset_file = self.robot_config.asset.urdf_file
         self.robot_asset = self._setup_robot_asset_when_env_created(asset_root, asset_file, self.robot_config.asset)

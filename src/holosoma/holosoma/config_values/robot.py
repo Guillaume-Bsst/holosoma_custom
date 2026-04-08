@@ -527,7 +527,7 @@ g1_29dof = RobotConfig(
         clip_torques=True,
     ),
     asset=RobotAssetConfig(
-        asset_root="@holosoma/data/robots",
+        asset_root="@holosoma_data/robots",
         collapse_fixed_joints=True,
         replace_cylinder_with_capsule=True,
         flip_visual_attachments=False,
@@ -537,9 +537,9 @@ g1_29dof = RobotConfig(
         max_linear_velocity=1000.0,
         angular_damping=0.0,
         linear_damping=0.0,
-        urdf_file="g1/g1_29dof.urdf",
+        urdf_file="g1/g1_29dof_training.urdf",
         usd_file=None,
-        xml_file="g1/g1_29dof.xml",
+        xml_file="g1/g1_29dof_training.xml",
         robot_type="g1_29dof",
         enable_self_collisions=False,
         default_dof_drive_mode=3,
@@ -615,8 +615,8 @@ g1_27dof = replace(
     ),
     asset=replace(
         g1_29dof.asset,
-        urdf_file="g1/g1_27dof.urdf",
-        xml_file="g1/g1_27dof.xml",
+        urdf_file="g1/g1_27dof_training.urdf",
+        xml_file="g1/g1_27dof_training.xml",
         robot_type="g1_27dof",
     ),
 )
@@ -1136,7 +1136,7 @@ t1_29dof_waist_wrist = RobotConfig(
         clip_torques=True,
     ),
     asset=RobotAssetConfig(
-        asset_root="@holosoma/data/robots",
+        asset_root="@holosoma_data/robots",
         collapse_fixed_joints=True,
         replace_cylinder_with_capsule=True,
         flip_visual_attachments=False,
@@ -1166,7 +1166,7 @@ g1_29dof_w_object = replace(
     g1_29dof,
     asset=replace(
         g1_29dof.asset,
-        urdf_file="g1/main_mesh_collision_halfspherehand.urdf",
+        urdf_file="g1/g1_29dof_halfspherehand_training.urdf",
     ),
     control=replace(
         g1_29dof.control,
@@ -1179,7 +1179,7 @@ g1_27dof_w_object = replace(
     g1_27dof,
     asset=replace(
         g1_27dof.asset,
-        urdf_file="g1/main_mesh_collision_halfspherehand.urdf",
+        urdf_file="g1/g1_29dof_halfspherehand_training.urdf",
     ),
     control=replace(
         g1_27dof.control,

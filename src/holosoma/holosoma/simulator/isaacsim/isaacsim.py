@@ -30,7 +30,7 @@ from isaaclab.utils.timer import Timer
 from loguru import logger
 from omegaconf import DictConfig
 
-from holosoma.utils.module_utils import get_holosoma_root
+from holosoma.utils.module_utils import get_holosoma_root, resolve_asset_root
 from holosoma.utils.path import resolve_data_file_path
 from holosoma.config_types.simulator import SimulatorInitConfig, SceneConfig
 from holosoma.managers.terrain import TerrainManager
@@ -201,8 +201,8 @@ class IsaacSim(BaseSimulator):
         robot_asset_cfg = self.robot_config.asset
 
         asset_root = robot_asset_cfg.asset_root
-        if asset_root.startswith("@holosoma/"):
-            asset_root = asset_root.replace("@holosoma", get_holosoma_root())
+        if asset_root.startswith("@holosoma"):  # handles @holosoma and @holosoma_data
+            asset_root = resolve_asset_root(asset_root)
 
         robot_rigid_props = sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
