@@ -98,7 +98,7 @@ _XML_TEMPLATE = dedent("""\
         <worldbody>
             <body name="{name}_link">
                 <inertial pos="0 0 0" mass="0.1" diaginertia="0.002 0.002 0.002"/>
-                <geom type="mesh" mesh="{name}_mesh"
+                <geom name="{name}" type="mesh" mesh="{name}_mesh"
                       pos="0 0 0" quat="1 0 0 0"
                       rgba="0.7 0.8 0.9 0.7"
                       friction="0.9 0.5 0.5"

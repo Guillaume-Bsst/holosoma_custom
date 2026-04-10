@@ -107,16 +107,25 @@ class InteractionMeshRetargeter:
         if self.visualize:
             self._setup_visualization()
 
-        # Load Mujoco model
+        # Load Mujoco model — combine robot XML + object XML programmatically via MjSpec
+        robot_xml_path = self.robot_model_path.replace(".urdf", ".xml")
         if self.object_name == "ground":
-            robot_xml_path = self.robot_model_path.replace(".urdf", ".xml")
+            self.robot_model = mujoco.MjModel.from_xml_path(robot_xml_path)
+            print("Loading robot model from: ", robot_xml_path)
         elif self.object_name == "multi_boxes":
             robot_xml_path = self.task_constants.SCENE_XML_FILE
+            self.robot_model = mujoco.MjModel.from_xml_path(robot_xml_path)
+            print("Loading robot model from: ", robot_xml_path)
         else:
-            robot_xml_path = self.robot_model_path.replace(".urdf", "_w_" + self.object_name + ".xml")
-
-        self.robot_model = mujoco.MjModel.from_xml_path(robot_xml_path)
-        print("Loading robot model from: ", robot_xml_path)
+            object_xml_path = self.object_model_path.replace(".urdf", ".xml")
+            robot_spec = mujoco.MjSpec.from_file(robot_xml_path)
+            obj_spec = mujoco.MjSpec.from_file(object_xml_path)
+            # Add freejoint so the object is free-floating in the simulation
+            obj_spec.body(self.object_name + "_link").add_freejoint()
+            frame = robot_spec.worldbody.add_frame()
+            robot_spec.attach(obj_spec, prefix="obj_", suffix="", frame=frame)
+            self.robot_model = robot_spec.compile()
+            print(f"Loading robot model from: {robot_xml_path} + {object_xml_path}")
 
         self.robot_data = mujoco.MjData(self.robot_model)
 
