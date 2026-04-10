@@ -5,26 +5,26 @@ Each worker calls the same pipeline as robot_retarget.py with all augmentations.
 
 Usage examples:
 
-    # OmniRetarget — robot_only (OMOMO / SMPLH)
+    # OmniRetarget — robot_only (OMOMO)
     python examples/parallel_robot_retarget.py \
-        --data-dir holosoma_data/datasets/OMOMO \
+        --data-dir holosoma_data/datasets/omomo \
         --task-type robot_only \
-        --data_format smplh \
-        --save_dir demo_results_parallel/g1/robot_only/omomo \
+        --data_format smplx \
+        --save_dir holosoma_data/pipeline/retargeted/g1/robot_only/omomo \
         --task-config.object-name ground
 
-    # OmniRetarget — object interaction
+    # OmniRetarget — object interaction (OMOMO)
     python examples/parallel_robot_retarget.py \
-        --data-dir holosoma_data/datasets/OMOMO \
+        --data-dir holosoma_data/datasets/omomo \
         --task-type object_interaction \
-        --data_format smplh \
-        --save_dir demo_results_parallel/g1/object_interaction/omomo \
+        --data_format smplx \
+        --save_dir holosoma_data/pipeline/retargeted/g1/object_interaction/omomo \
         --task-config.object-name largebox
 
-    # GMR — robot_only (SMPLX)
+    # GMR — robot_only (SFU / AMASS)
     python examples/parallel_robot_retarget.py \
         --retargeter-method gmr \
-        --data-dir holosoma_data/datasets/SFU_demo \
+        --data-dir holosoma_data/datasets/sfu \
         --task-type robot_only \
         --data_format smplx
 

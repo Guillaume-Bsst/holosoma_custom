@@ -10,7 +10,7 @@ Motion: `SFU_0018_0018_DanceTurns001_stageii` (SFU / AMASS, SMPL-X)
 source /root/.holosoma_deps/miniconda3/etc/profile.d/conda.sh && conda activate hsretargeting
 cd src/holosoma_retargeting/holosoma_retargeting
 python examples/robot_retarget.py \
-    --data_path holosoma_data/datasets/SFU_demo/ \
+    --data_path holosoma_data/datasets/sfu/ \
     --task-type robot_only \
     --task-name SFU_0018_0018_DanceTurns001_stageii \
     --data_format smplx \

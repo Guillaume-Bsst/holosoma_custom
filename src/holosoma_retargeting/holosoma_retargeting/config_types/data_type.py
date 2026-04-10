@@ -349,7 +349,7 @@ def _validate_data_format(data_format: str) -> None:
 @dataclass(frozen=True)
 class MotionDataConfig:
     # Use str instead of Literal to allow dynamic data formats via DEMO_JOINTS_REGISTRY
-    data_format: str = "smplh"
+    data_format: str = "smplx"
     # Use str instead of Literal to allow dynamic robot types
     robot_type: str = "g1"
     robot_defaults: dict[str, RobotDefaults] = field(default_factory=_default_robot_defaults)

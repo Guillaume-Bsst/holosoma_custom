@@ -32,18 +32,13 @@ except ImportError:
     _OBJECTS_DIR = "models"
     _ROBOTS_DIR = "models"
 
-from holosoma_retargeting.config_types.data_type import (  # noqa: E402
-    SMPLH_DEMO_JOINTS,
-    MotionDataConfig,
-)
+from holosoma_retargeting.config_types.data_type import MotionDataConfig  # noqa: E402
 from holosoma_retargeting.config_types.robot import RobotConfig  # noqa: E402
 from holosoma_retargeting.src.mujoco_utils import _world_mesh_from_geom  # type: ignore[import-not-found]  # noqa: E402
 from holosoma_retargeting.src.utils import (  # type: ignore[import-not-found]  # noqa: E402
-    calculate_scale_factor,
     create_new_scene_xml_file,
     create_scaled_multi_boxes_xml,
     extract_foot_sticking_sequence_velocity,
-    load_intermimic_data,
     preprocess_motion_data,
     transform_points_world_to_local,
     transform_y_up_to_z_up,
@@ -450,8 +445,13 @@ class RetargetingEvaluator:
             return None
         penetration_duration, penetration_max_depths = self.evaluate_penetration(q_retarget)
 
-        human_joints, object_poses = load_intermimic_data(f"{input_data_dir}/{task_name}.pt")
-        contact_sequences = extract_foot_sticking_sequence_velocity(human_joints, self.demo_joints, ["L_Toe", "R_Toe"])
+        npz_data = np.load(f"{input_data_dir}/{task_name}.npz")
+        human_joints = npz_data["global_joint_positions"]
+        object_poses = npz_data["object_poses"]
+        human_height = npz_data["height"]
+        smpl_scale = self.constants.ROBOT_HEIGHT / human_height
+        human_joints = human_joints * smpl_scale
+        contact_sequences = extract_foot_sticking_sequence_velocity(human_joints, self.demo_joints, ["L_Toe", "R_Foot"])
         sliding_duration, max_toe_sliding_velocities = self.detect_foot_sliding(
             q_retarget, contact_sequences[: q_retarget.shape[0]]
         )
@@ -595,41 +595,29 @@ class RetargetingEvaluator:
 
         # Determine data format by checking file existence
         data_name = task_name.split("_original")[0]
+        npz_path = Path(input_data_dir) / f"{data_name}.npz"
         npy_path = Path(input_data_dir) / f"{data_name}.npy"
-        pt_path = Path(input_data_dir) / f"{data_name}.pt"
 
-        # Determine data format and toe names based on file extension
-        if pt_path.exists():
-            # OMOMO (smplh) data format
-            toe_names = ["L_Toe", "R_Toe"]
-            human_joints, _ = load_intermimic_data(str(pt_path))
-            smpl_scale = calculate_scale_factor(data_name, self.constants.ROBOT_HEIGHT)
-
-            # For smplh data, we need to use smplh demo_joints for contact extraction
-            # Check if toe names are in current demo_joints
-            if all(toe in self.demo_joints for toe in toe_names):
-                # Use current demo_joints
-                demo_joints_for_contact = self.demo_joints
-                human_joints = preprocess_motion_data(human_joints, self, toe_names, smpl_scale)
-            else:
-                # Use smplh demo_joints for contact extraction
-                demo_joints_for_contact = SMPLH_DEMO_JOINTS
-                # Just scale without normalization (smplh data doesn't need height normalization)
-                human_joints = human_joints * smpl_scale
+        if npz_path.exists():
+            # smplx format (OMOMO, AMASS/SFU)
+            toe_names = ["L_Foot", "R_Foot"]
+            human_data = np.load(str(npz_path))
+            human_joints = human_data["global_joint_positions"]
+            smpl_scale = self.constants.ROBOT_HEIGHT / human_data["height"]
+            human_joints = preprocess_motion_data(human_joints, self, toe_names, smpl_scale)
+            demo_joints_for_contact = self.demo_joints
         elif npy_path.exists():
             # LAFAN data format
             toe_names = ["LeftToeBase", "RightToeBase"]
             human_joints = np.load(str(npy_path))
             human_joints = transform_y_up_to_z_up(human_joints)
             spine_joint_idx = self.demo_joints.index("Spine1")
-            # LAFAN-specific spine adjustment
             human_joints[:, spine_joint_idx, -1] -= 0.06
             smpl_scale = getattr(self.constants, "DEFAULT_SCALE_FACTOR", None) or 1.0
-
             human_joints = preprocess_motion_data(human_joints, self, toe_names, smpl_scale)
             demo_joints_for_contact = self.demo_joints
         else:
-            raise FileNotFoundError(f"Neither {npy_path} nor {pt_path} found for task {data_name}")
+            raise FileNotFoundError(f"Neither {npz_path} nor {npy_path} found for task {data_name}")
 
         contact_sequences = extract_foot_sticking_sequence_velocity(
             human_joints,
@@ -746,14 +734,14 @@ class Args:
     # Nested configs for overrides
     robot_config: RobotConfig = field(default_factory=lambda: RobotConfig(robot_type="g1"))
     motion_data_config: MotionDataConfig = field(
-        default_factory=lambda: MotionDataConfig(data_format="smplh", robot_type="g1")
+        default_factory=lambda: MotionDataConfig(data_format="smplx", robot_type="g1")
     )
 
 
 def main(cfg: Args) -> None:
     default_data_formats = {
-        "robot_object": "smplh",
-        "robot_only": "smplh",
+        "robot_object": "smplx",
+        "robot_only": "smplx",
         "robot_terrain": "mocap",
     }
 

@@ -16,9 +16,9 @@ from holosoma_retargeting.config_types.task import TaskConfig
 
 try:
     from holosoma_data import DATASETS_DIR as _hd_datasets_dir
-    _DEFAULT_DATA_PATH = _hd_datasets_dir / "OMOMO"
+    _DEFAULT_DATA_PATH = _hd_datasets_dir / "omomo"
 except ImportError:
-    _DEFAULT_DATA_PATH = Path("demo_data/OMOMO")
+    _DEFAULT_DATA_PATH = Path("holosoma_data/datasets/omomo")
 
 
 @dataclass
@@ -76,7 +76,7 @@ class RetargetingConfig:
     via --robot-config.robot-urdf-file)."""
 
     motion_data_config: MotionDataConfig = field(
-        default_factory=lambda: MotionDataConfig(data_format="smplh", robot_type="g1")
+        default_factory=lambda: MotionDataConfig(data_format="smplx", robot_type="g1")
     )
     """Motion data configuration (nested - can override demo_joints, joints_mapping, etc.
     via --motion-data-config.demo-joints).

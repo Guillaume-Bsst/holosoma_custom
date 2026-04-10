@@ -2,27 +2,27 @@
 
 Usage examples:
 
-    # OmniRetarget (default) — robot_only with SMPLH data
+    # OmniRetarget (default) — robot_only (OMOMO)
     python examples/robot_retarget.py \
         --task-type robot_only \
-        --data_path holosoma_data/datasets/OMOMO \
+        --data_path holosoma_data/datasets/omomo \
         --task-name sub3_largebox_003 \
-        --data_format smplh \
+        --data_format smplx \
         --retargeter.debug
 
-    # OmniRetarget — object interaction
+    # OmniRetarget — object interaction (OMOMO)
     python examples/robot_retarget.py \
         --task-type object_interaction \
-        --data_path holosoma_data/datasets/OMOMO \
+        --data_path holosoma_data/datasets/omomo \
         --task-name sub3_largebox_003 \
-        --data_format smplh \
+        --data_format smplx \
         --retargeter.visualize
 
-    # GMR — robot_only with SMPLX data
+    # GMR — robot_only (SFU / AMASS)
     python examples/robot_retarget.py \
         --retargeter-method gmr \
         --task-type robot_only \
-        --data_path holosoma_data/datasets/SFU_demo \
+        --data_path holosoma_data/datasets/sfu \
         --task-name my_sequence \
         --data_format smplx \
         --gmr.src_human smplx
@@ -31,7 +31,7 @@ Usage examples:
     python examples/robot_retarget.py \
         --robot-config.robot-dof 27 \
         --task-type robot_only \
-        --data_path holosoma_data/datasets/OMOMO \
+        --data_path holosoma_data/datasets/omomo \
         --task-name sub3_largebox_003
 
 See holosoma_retargeting/pipeline/run.py for the full pipeline logic.

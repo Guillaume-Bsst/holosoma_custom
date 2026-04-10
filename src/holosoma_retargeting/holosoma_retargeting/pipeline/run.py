@@ -164,8 +164,8 @@ def validate_config(cfg: RetargetingConfig) -> None:
         )
     if cfg.task_type == "climbing" and cfg.data_format not in (None, "mocap"):
         raise ValueError("Climbing task requires 'mocap' data format")
-    if cfg.task_type == "object_interaction" and cfg.data_format not in (None, "smplh"):
-        raise ValueError("Object interaction requires 'smplh' data format")
+    if cfg.task_type == "object_interaction" and cfg.data_format not in (None, "smplx", "smplh"):
+        raise ValueError("Object interaction requires 'smplx' (or legacy 'smplh') data format")
 
 
 # ------------------------------------------------------------------
@@ -453,8 +453,8 @@ def run_retargeting(cfg: RetargetingConfig) -> None:
 # ------------------------------------------------------------------
 
 _DEFAULT_DATA_FORMATS: dict[str, str] = {
-    "robot_only": "smplh",
-    "object_interaction": "smplh",
+    "robot_only": "smplx",
+    "object_interaction": "smplx",
     "climbing": "mocap",
 }
 

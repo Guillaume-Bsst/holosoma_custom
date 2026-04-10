@@ -1,17 +1,22 @@
 # Holosoma — deploy/
 
-This folder contains everything needed to run Holosoma: environment setup, container definition,
-SLURM job scripts, and usage guides.
+This folder contains everything needed to install and run Holosoma: environment setup, container definition, SLURM job scripts, and operational guides.
 
 ## Documentation
 
 | File | Contents |
 |---|---|
-| [INSTALL.md](INSTALL.md) | What to install depending on your use case (local conda or Apptainer) |
-| [RETARGETING.md](RETARGETING.md) | How to run retargeting and data conversion (27-DOF / 29-DOF) |
-| [TRAINING.md](TRAINING.md) | How to run training jobs (MJWarp, IsaacSim, multi-GPU, with objects) |
-| [EVALUATION.md](EVALUATION.md) | How to evaluate a trained checkpoint and export to ONNX |
-| [INFERENCE.md](INFERENCE.md) | How to run inference on the real robot or in simulation (MuJoCo, PyBullet) |
+| [INSTALL.md](INSTALL.md) | Environment setup — local conda or Apptainer |
+| [RETARGETING.md](RETARGETING.md) | Retargeting and data conversion commands |
+
+For training, evaluation, and inference guides, see the per-module READMEs:
+
+| Module | Guide |
+|---|---|
+| Training | [src/holosoma/README.md](../src/holosoma/README.md) |
+| Inference & deployment | [src/holosoma_inference/README.md](../src/holosoma_inference/README.md) |
+| Retargeting (full reference) | [src/holosoma_retargeting/holosoma_retargeting/README.md](../src/holosoma_retargeting/holosoma_retargeting/README.md) |
+| Dataset preparation | [src/holosoma_data/README.md](../src/holosoma_data/README.md) |
 
 ## Folder structure
 
@@ -19,10 +24,7 @@ SLURM job scripts, and usage guides.
 deploy/
 ├── README.md                  ← this file
 ├── INSTALL.md                 ← installation guide
-├── RETARGETING.md             ← retargeting & data conversion guide
-├── TRAINING.md                ← training guide
-├── EVALUATION.md              ← policy evaluation & ONNX export guide
-├── INFERENCE.md               ← inference & sim-to-sim guide
+├── RETARGETING.md             ← retargeting & data conversion quick reference
 ├── local/
 │   ├── setup_holosoma.sh      ← full local install (no sudo)
 │   ├── setup_isaacsim.sh

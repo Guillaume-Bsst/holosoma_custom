@@ -128,11 +128,19 @@ def load_motion_data(
         object_poses = np.tile(np.array([[1, 0, 0, 0, 0, 0, 0]], dtype=float), (num_frames, 1))
 
     elif task_type == "object_interaction":
-        pt_path = data_path / f"{task_name}.pt"
-        if not pt_path.exists():
-            raise FileNotFoundError(f"InterMimic data file not found: {pt_path}")
-        human_joints, object_poses = load_intermimic_data(str(pt_path))
-        smpl_scale = calculate_scale_factor(task_name, constants.ROBOT_HEIGHT)
+        npz_path = data_path / f"{task_name}.npz"
+        if not npz_path.exists():
+            raise FileNotFoundError(f"Motion data file not found: {npz_path}")
+        human_data = np.load(str(npz_path))
+        human_joints = human_data["global_joint_positions"]
+        human_height = human_data["height"]
+        smpl_scale = constants.ROBOT_HEIGHT / human_height
+        if "object_poses" not in human_data:
+            raise KeyError(
+                f"'object_poses' key missing in {npz_path}. "
+                "Re-run prep_omomo_for_rt.py to regenerate the file."
+            )
+        object_poses = human_data["object_poses"]
 
     elif task_type == "climbing":
         task_dir = data_path / task_name

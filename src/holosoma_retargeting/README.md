@@ -1,10 +1,19 @@
 # Holosoma Motion Retargeting
 
-This repository provides tools for retargeting human motion data to humanoid robots. It supports multiple data formats (smplh, mocap, lafan) and task types including robot-only motion, object interaction, and climbing.
+This repository provides tools for retargeting human motion data to humanoid robots. It supports multiple data formats (smplx, mocap, lafan) and task types including robot-only motion, object interaction, and climbing.
+
+**Working directory**: All commands in this guide are run from `src/holosoma_retargeting/holosoma_retargeting/` after sourcing the retargeting environment:
+
+```bash
+source scripts/source_retargeting_setup.sh    # run from holosoma/ root
+cd src/holosoma_retargeting/holosoma_retargeting
+```
 
 **Data Requirements**: The retargeting pipeline requires motion data in world joint positions. For custom data, you need to prepare world joint positions in shape `(T, J, 3)` where T is the number of frames and J is the number of joints, and modify `demo_joints` and `joints_mapping` defined in `config_types/data_type.py`.
 
-All datasets and pipeline outputs are stored in `holosoma_data/` (the shared data package). Default paths below assume `holosoma_data` is installed.
+**Dataset uniformity**: All datasets (OMOMO, AMASS/SFU, LAFAN) are stored as pre-processed files in `holosoma_data/datasets/`. Each dataset has a preparation script in `data_utils/` that converts raw downloaded data into the format expected by the retargeting pipeline. All retargeters (OmniRetarget, GMR, Test) can process any dataset. See [Dataset Preparation](../../holosoma_data/README.md).
+
+All datasets and pipeline outputs are stored in `holosoma_data/` (the shared data package). Default paths below assume the working directory is `src/holosoma_retargeting/holosoma_retargeting/`.
 
 ## DOF Mode Selection (27-DOF / 29-DOF)
 
@@ -32,16 +41,16 @@ The flag works with all commands: single retargeting, batch processing, evaluati
 
 ```bash
 # Robot-only (OMOMO)
-python examples/robot_retarget.py --data_path holosoma_data/datasets/OMOMO --task-type robot_only --task-name sub3_largebox_003 --data_format smplh --retargeter.debug --retargeter.visualize
+python examples/robot_retarget.py --data_path holosoma_data/datasets/omomo --task-type robot_only --task-name sub3_largebox_003 --data_format smplx --retargeter.debug --retargeter.visualize
 
 # Object interaction (OMOMO)
-python examples/robot_retarget.py --data_path holosoma_data/datasets/OMOMO --task-type object_interaction --task-name sub3_largebox_003 --data_format smplh --retargeter.debug --retargeter.visualize
+python examples/robot_retarget.py --data_path holosoma_data/datasets/omomo --task-type object_interaction --task-name sub3_largebox_003 --data_format smplx --retargeter.debug --retargeter.visualize
 
 # Climbing
 python examples/robot_retarget.py --data_path holosoma_data/datasets/climb --task-type climbing --task-name mocap_climb_seq_0 --data_format mocap --robot-config.robot-urdf-file holosoma_data/robots/g1/g1_29dof_spherehand_retargeting.urdf --retargeter.debug --retargeter.visualize
 
 # 27-DOF example (robot-only)
-python examples/robot_retarget.py --data_path holosoma_data/datasets/OMOMO --task-type robot_only --task-name sub3_largebox_003 --data_format smplh --robot-config.robot-dof 27 --retargeter.debug --retargeter.visualize
+python examples/robot_retarget.py --data_path holosoma_data/datasets/omomo --task-type robot_only --task-name sub3_largebox_003 --data_format smplx --robot-config.robot-dof 27 --retargeter.debug --retargeter.visualize
 ```
 
 **Note**: Add `--augmentation` to run sequences with augmentation. You must first run the original sequence before adding augmentation.
@@ -50,10 +59,10 @@ python examples/robot_retarget.py --data_path holosoma_data/datasets/OMOMO --tas
 
 ```bash
 # Robot-only (OMOMO)
-python examples/parallel_robot_retarget.py --data-dir holosoma_data/datasets/OMOMO --task-type robot_only --data_format smplh --save_dir holosoma_data/pipeline/retargeted/g1/robot_only/omomo --task-config.object-name ground
+python examples/parallel_robot_retarget.py --data-dir holosoma_data/datasets/omomo --task-type robot_only --data_format smplx --save_dir holosoma_data/pipeline/retargeted/g1/robot_only/omomo --task-config.object-name ground
 
 # Object interaction (OMOMO)
-python examples/parallel_robot_retarget.py --data-dir holosoma_data/datasets/OMOMO --task-type object_interaction --data_format smplh --save_dir holosoma_data/pipeline/retargeted/g1/object_interaction/omomo --task-config.object-name largebox
+python examples/parallel_robot_retarget.py --data-dir holosoma_data/datasets/omomo --task-type object_interaction --data_format smplx --save_dir holosoma_data/pipeline/retargeted/g1/object_interaction/omomo --task-config.object-name largebox
 
 # Climbing
 python examples/parallel_robot_retarget.py --data-dir holosoma_data/datasets/climb --task-type climbing --data_format mocap --robot-config.robot-urdf-file holosoma_data/robots/g1/g1_29dof_spherehand_retargeting.urdf --task-config.object-name multi_boxes --save_dir holosoma_data/pipeline/retargeted/g1/climbing/mocap_climb
@@ -67,12 +76,24 @@ Datasets live in `holosoma_data/datasets/`. To test on more motion sequences, fo
 
 ### OMOMO
 
-Our pipeline uses the processed dataset by InterMimic. The data format differs from the original OMOMO dataset.
+#### Download the Original OMOMO Data
 
-1. Download the processed OMOMO data from [this link](https://drive.google.com/file/d/141YoPOd2DlJ4jhU2cpZO5VU5GzV_lm5j/view)
-2. Extract the downloaded folder to `holosoma_data/datasets/OMOMO`
+1. Download the [OMOMO dataset](https://drive.google.com/file/d/1tZVqLB7II0whI-Qjz-z-AU3ponSEyAmm/view) (`data/` folder)
+2. Download the [SMPL-H model](https://mano.is.tue.mpg.de/download.php) (select "Extended SMPL+H model for AMASS") and place it in `holosoma_data/datasets/smplh_models/` (structure: `smplh/male/model.npz`, `smplh/female/model.npz`, `smplh/neutral/model.npz`)
 
-The data should contain `.pt` files.
+#### Convert the Original OMOMO Data Format for Motion Retargeting
+
+```bash
+cd data_utils/
+python prep_omomo_for_rt.py \
+    --omomo-root-folder /path/to/omomo/data \
+    --output-folder holosoma_data/datasets/omomo \
+    --smplh-root-folder holosoma_data/datasets/smplh_models \
+    --objects-output-folder holosoma_data/objects
+cd ..
+```
+
+This converts the raw OMOMO `.p` files to `.npz` format with global joint positions and height — the same format as AMASS/SFU.
 
 ### LAFAN
 
@@ -87,11 +108,14 @@ The data should contain `.pt` files.
 We need some data processing files from the [LAFAN GitHub repo](https://github.com/ubisoft/ubisoft-laforge-animation-dataset).
 
 ```bash
-cd holosoma_retargeting/data_utils/
+cd data_utils/
+# Clone processing scripts if not already present:
 git clone https://github.com/ubisoft/ubisoft-laforge-animation-dataset.git
 mv ubisoft-laforge-animation-dataset/lafan1 .
+
 python extract_global_positions.py --input_dir DATA_FOLDER_PATH/lafan
 # output goes to holosoma_data/datasets/lafan/ by default
+cd ..
 ```
 
 This will convert the BVH files to `.npy` format with global joint positions.
@@ -128,19 +152,17 @@ python examples/parallel_robot_retarget.py --data-dir holosoma_data/datasets/laf
 We provide `data_utils/prep_amass_smplx_for_rt.py` for converting AMASS SMPLX data to the format required for motion retargeting.
 
 ```bash
-# Install dependencies
-cd holosoma_retargeting/data_utils/
-git clone https://github.com/nghorbani/human_body_prior.git
-pip install tqdm dotmap PyYAML omegaconf loguru
-cd human_body_prior/
-python setup.py develop
-cd ../
+cd data_utils/
+# Install dependencies if needed:
+# git clone https://github.com/nghorbani/human_body_prior.git
+# pip install tqdm dotmap PyYAML omegaconf loguru
+# cd human_body_prior && python setup.py develop && cd ..
 
-# Run data processing
 python prep_amass_smplx_for_rt.py \
   --amass-root-folder /path/to/amass \
-  --output-folder holosoma_data/datasets/amass_smplx_processed \
+  --output-folder holosoma_data/datasets/sfu \
   --model-root-folder holosoma_data/datasets/smplx_models
+cd ..
 ```
 
 This will convert the AMASS `.npz` files to `.npz` format with global joint positions and height information.
@@ -150,13 +172,13 @@ This will convert the AMASS `.npz` files to `.npz` format with global joint posi
 #### Single Sequence Retargeting on AMASS SMPL-X
 
 ```bash
-python examples/robot_retarget.py --data_path holosoma_data/datasets/amass_smplx_processed --task-type robot_only --task-name HumanEva_S3_Jog_1_stageii --data_format smplx --task-config.ground-range -10 10 --save_dir holosoma_data/pipeline/retargeted/g1/robot_only/amass_smplx --retargeter.debug --retargeter.visualize
+python examples/robot_retarget.py --data_path holosoma_data/datasets/sfu --task-type robot_only --task-name HumanEva_S3_Jog_1_stageii --data_format smplx --task-config.ground-range -10 10 --save_dir holosoma_data/pipeline/retargeted/g1/robot_only/amass_smplx --retargeter.debug --retargeter.visualize
 ```
 
 #### Batch Processing for Motion Retargeting on AMASS SMPL-X
 
 ```bash
-python examples/parallel_robot_retarget.py --data-dir holosoma_data/datasets/amass_smplx_processed --task-type robot_only --data_format smplx --save_dir holosoma_data/pipeline/retargeted/g1/robot_only/amass_smplx --task-config.object-name ground --task-config.ground-range -10 10
+python examples/parallel_robot_retarget.py --data-dir holosoma_data/datasets/sfu --task-type robot_only --data_format smplx --save_dir holosoma_data/pipeline/retargeted/g1/robot_only/amass_smplx --task-config.object-name ground --task-config.ground-range -10 10
 ```
 
 ## Check Visualizations of Saved Retargeting Results
@@ -199,13 +221,13 @@ python viser_player.py --robot_urdf holosoma_data/robots/g1/g1_29dof_retargeting
 
 ```bash
 # Evaluate robot-object interaction
-python evaluation/eval_retargeting.py --res_dir holosoma_data/pipeline/retargeted/g1/object_interaction/omomo --data_dir holosoma_data/datasets/OMOMO --data_type "robot_object"
+python evaluation/eval_retargeting.py --res_dir holosoma_data/pipeline/retargeted/g1/object_interaction/omomo --data_dir holosoma_data/datasets/omomo --data_type "robot_object"
 
 # Evaluate climbing sequence
 python evaluation/eval_retargeting.py --res_dir holosoma_data/pipeline/retargeted/g1/climbing/mocap_climb --data_dir holosoma_data/datasets/climb --data_type "robot_terrain" --robot-config.robot-urdf-file holosoma_data/robots/g1/g1_29dof_spherehand_retargeting.urdf
 
 # Evaluate robot only (OMOMO)
-python evaluation/eval_retargeting.py --res_dir holosoma_data/pipeline/retargeted/g1/robot_only/omomo --data_dir holosoma_data/datasets/OMOMO --data_type "robot_only"
+python evaluation/eval_retargeting.py --res_dir holosoma_data/pipeline/retargeted/g1/robot_only/omomo --data_dir holosoma_data/datasets/omomo --data_type "robot_only"
 ```
 
 ## Prepare Data for Training RL Whole-Body Tracking Policy
@@ -221,15 +243,15 @@ To prepare data for training RL whole-body tracking policies, you need to follow
 ### Mac (using mjpython)
 
 ```bash
-mjpython data_conversion/convert_data_format_mj.py --input_file holosoma_data/pipeline/retargeted/g1/robot_only/omomo/sub3_largebox_003.npz --output_fps 50 --output_name holosoma_data/pipeline/converted/robot_only/sub3_largebox_003_mj_fps50.npz --data_format smplh --object_name "ground" --once
+mjpython data_conversion/convert_data_format_mj.py --input_file holosoma_data/pipeline/retargeted/g1/robot_only/omomo/sub3_largebox_003.npz --output_fps 50 --output_name holosoma_data/pipeline/converted/robot_only/sub3_largebox_003_mj_fps50.npz --data_format smplx --object_name "ground" --once
 
-mjpython data_conversion/convert_data_format_mj.py --input_file holosoma_data/pipeline/retargeted/g1/object_interaction/omomo/sub3_largebox_003_original.npz --output_fps 50 --output_name holosoma_data/pipeline/converted/object_interaction/sub3_largebox_003_mj_w_obj.npz --data_format smplh --object_name "largebox" --has_dynamic_object --once
+mjpython data_conversion/convert_data_format_mj.py --input_file holosoma_data/pipeline/retargeted/g1/object_interaction/omomo/sub3_largebox_003_original.npz --output_fps 50 --output_name holosoma_data/pipeline/converted/object_interaction/sub3_largebox_003_mj_w_obj.npz --data_format smplx --object_name "largebox" --has_dynamic_object --once
 ```
 
 ### Robot-Only Setting
 
 ```bash
-python data_conversion/convert_data_format_mj.py --input_file holosoma_data/pipeline/retargeted/g1/robot_only/omomo/sub3_largebox_003.npz --output_fps 50 --output_name holosoma_data/pipeline/converted/robot_only/sub3_largebox_003_mj_fps50.npz --data_format smplh --object_name "ground" --once
+python data_conversion/convert_data_format_mj.py --input_file holosoma_data/pipeline/retargeted/g1/robot_only/omomo/sub3_largebox_003.npz --output_fps 50 --output_name holosoma_data/pipeline/converted/robot_only/sub3_largebox_003_mj_fps50.npz --data_format smplx --object_name "ground" --once
 
 python data_conversion/convert_data_format_mj.py --input_file holosoma_data/pipeline/retargeted/g1/robot_only/lafan/dance2_subject1.npz --output_fps 50 --output_name holosoma_data/pipeline/converted/robot_only/dance2_subject1_mj_fps50.npz --data_format lafan --object_name "ground" --once
 ```
@@ -237,7 +259,7 @@ python data_conversion/convert_data_format_mj.py --input_file holosoma_data/pipe
 ### Robot-Object Setting
 
 ```bash
-python data_conversion/convert_data_format_mj.py --input_file holosoma_data/pipeline/retargeted/g1/object_interaction/omomo/sub3_largebox_003_original.npz --output_fps 50 --output_name holosoma_data/pipeline/converted/object_interaction/sub3_largebox_003_mj_w_obj.npz --data_format smplh --object_name "largebox" --has_dynamic_object --once
+python data_conversion/convert_data_format_mj.py --input_file holosoma_data/pipeline/retargeted/g1/object_interaction/omomo/sub3_largebox_003_original.npz --output_fps 50 --output_name holosoma_data/pipeline/converted/object_interaction/sub3_largebox_003_mj_w_obj.npz --data_format smplx --object_name "largebox" --has_dynamic_object --once
 ```
 
 ### OmniRetarget Data
@@ -245,7 +267,7 @@ python data_conversion/convert_data_format_mj.py --input_file holosoma_data/pipe
 For OmniRetarget data downloaded from HuggingFace, please add `--use_omniretarget_data` for data conversion.
 
 ```bash
-python data_conversion/convert_data_format_mj.py --input_file OmniRetarget/robot-object/sub3_largebox_003_original.npz --output_fps 50 --output_name holosoma_data/pipeline/converted/object_interaction/sub3_largebox_003_mj_w_obj_omnirt.npz --data_format smplh --object_name "largebox" --has_dynamic_object --use_omniretarget_data --once
+python data_conversion/convert_data_format_mj.py --input_file OmniRetarget/robot-object/sub3_largebox_003_original.npz --output_fps 50 --output_name holosoma_data/pipeline/converted/object_interaction/sub3_largebox_003_mj_w_obj_omnirt.npz --data_format smplx --object_name "largebox" --has_dynamic_object --use_omniretarget_data --once
 ```
 
 ## Custom Human Motion Data Format
