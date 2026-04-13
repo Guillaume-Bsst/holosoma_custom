@@ -176,15 +176,20 @@ def extract_object_poses(seq: dict) -> np.ndarray | None:
     Extract object poses from an OMOMO sequence dict and convert to pipeline format.
 
     The pipeline expects (T, 7) with [qw, qx, qy, qz, x, y, z].
-    OMOMO stores obj_trans (T, 3, 1) and obj_rot (T, 3, 3).
+    OMOMO stores obj_com_pos (T, 3) — object center-of-mass in world Z-up frame —
+    and obj_rot (T, 3, 3).
+
+    obj_com_pos is used (not obj_trans) because it represents the geometric center
+    of the object matching MuJoCo's body origin convention, and is already in Z-up
+    world frame. This matches how InterAct/InterMimic process OMOMO data.
 
     Returns None if object data is absent.
     """
-    if "obj_trans" not in seq or "obj_rot" not in seq:
+    if "obj_com_pos" not in seq or "obj_rot" not in seq:
         return None
 
-    obj_trans = seq["obj_trans"].reshape(-1, 3)   # T X 3
-    obj_rot = seq["obj_rot"]                       # T X 3 X 3
+    obj_trans = seq["obj_com_pos"]   # T X 3, Z-up world frame (center of mass)
+    obj_rot = seq["obj_rot"]         # T X 3 X 3
 
     # Rotation matrix → quaternion [qx, qy, qz, qw] → reorder to [qw, qx, qy, qz]
     quat_xyzw = Rotation.from_matrix(obj_rot).as_quat()  # T X 4 (xyzw)
