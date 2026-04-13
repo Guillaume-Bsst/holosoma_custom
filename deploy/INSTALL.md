@@ -38,6 +38,21 @@ source scripts/source_mujoco_setup.sh       # activates hsmujoco
 source scripts/source_retargeting_setup.sh  # activates hsretargeting
 ```
 
+After installation, use the deploy quick references below, and consult module docs for full details:
+
+- [TRAINING.md](TRAINING.md) — training quick reference and cluster commands
+- [EVALUATION.md](EVALUATION.md) — evaluation and ONNX export quick reference
+- [INFERENCE.md](INFERENCE.md) — inference quick reference
+- [RETARGETING.md](RETARGETING.md) — retargeting quick reference
+- [src/holosoma/README.md](../src/holosoma/README.md) — full training and evaluation documentation
+- [src/holosoma_inference/README.md](../src/holosoma_inference/README.md) — full inference documentation
+- [src/holosoma_retargeting/README.md](../src/holosoma_retargeting/README.md) — full retargeting documentation
+- [src/holosoma_data/README.md](../src/holosoma_data/README.md) — full dataset preparation documentation
+
+> **Important:** The `deploy/` docs are meant for quick operational use only.
+> For exact config syntax, parameter meanings, and workflow details, consult the
+> corresponding `src/` module README.
+
 ### PyBullet bridge (sim-to-sim)
 
 The PyBullet sim-to-sim workflow requires a separate ROS2 workspace:
@@ -50,8 +65,7 @@ Follow the installation instructions in that repository. The workspace ends up a
 
 ## Apptainer (cluster)
 
-Intended for SLURM training jobs. Provides a fully reproducible environment across nodes
-without requiring `sudo` or a specific host OS.
+Intended for SLURM training jobs. Provides a fully reproducible environment across nodes without requiring `sudo` or a specific host OS.
 
 ### Requirements
 

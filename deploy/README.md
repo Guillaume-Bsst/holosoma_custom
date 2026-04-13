@@ -1,21 +1,25 @@
 # Holosoma — deploy/
 
-This folder contains everything needed to install and run Holosoma: environment setup, container definition, SLURM job scripts, and operational guides.
+This folder contains installation and runtime quick-reference guides for Holosoma.
+It is not the primary user manual: the source-module readmes hold the full details.
 
 ## Documentation
 
 | File | Contents |
 |---|---|
 | [INSTALL.md](INSTALL.md) | Environment setup — local conda or Apptainer |
-| [RETARGETING.md](RETARGETING.md) | Retargeting and data conversion commands |
+| [TRAINING.md](TRAINING.md) | Training quick reference and cluster commands |
+| [EVALUATION.md](EVALUATION.md) | Checkpoint evaluation and ONNX export |
+| [INFERENCE.md](INFERENCE.md) | Real robot and sim-to-sim inference quick reference |
+| [RETARGETING.md](RETARGETING.md) | Retargeting and data conversion quick reference |
 
-For training, evaluation, and inference guides, see the per-module READMEs:
+For the full module documentation, see:
 
 | Module | Guide |
 |---|---|
 | Training | [src/holosoma/README.md](../src/holosoma/README.md) |
 | Inference & deployment | [src/holosoma_inference/README.md](../src/holosoma_inference/README.md) |
-| Retargeting (full reference) | [src/holosoma_retargeting/holosoma_retargeting/README.md](../src/holosoma_retargeting/holosoma_retargeting/README.md) |
+| Retargeting | [src/holosoma_retargeting/README.md](../src/holosoma_retargeting/README.md) |
 | Dataset preparation | [src/holosoma_data/README.md](../src/holosoma_data/README.md) |
 
 ## Folder structure
@@ -24,7 +28,10 @@ For training, evaluation, and inference guides, see the per-module READMEs:
 deploy/
 ├── README.md                  ← this file
 ├── INSTALL.md                 ← installation guide
-├── RETARGETING.md             ← retargeting & data conversion quick reference
+├── TRAINING.md                ← training quick reference
+├── EVALUATION.md              ← policy evaluation quick reference
+├── INFERENCE.md               ← inference quick reference
+├── RETARGETING.md             ← retargeting quick reference
 ├── local/
 │   ├── setup_holosoma.sh      ← full local install (no sudo)
 │   ├── setup_isaacsim.sh
@@ -52,5 +59,4 @@ deploy/
 bash deploy/local/setup_holosoma.sh
 ```
 
-**Cluster training (SLURM):** build the Apptainer image first — see [INSTALL.md](INSTALL.md),
-then submit a job from `deploy/cluster/slurm/`.
+**Cluster training (SLURM):** build the Apptainer image first — see [INSTALL.md](INSTALL.md), then submit a job from `deploy/cluster/slurm/`.

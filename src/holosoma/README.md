@@ -157,7 +157,16 @@ For testing trained policies in MuJoCo simulation or deploying to real robots, s
 
 The training system uses a hierarchical configuration system. The `exp` config serves as the main entry point with default configurations tuned for each algorithm and robot. You can customize training by overriding parameters on the command line.
 
+> **Documentation note**: This file is the canonical training reference. The
+> `deploy/` quick references are useful for operational commands, but the
+> `src/` module docs are authoritative for config syntax, option meanings, and
+> task behavior.
+
 > **Tip**: When composing Tyro configs, pass the `exp:<name>` preset before any other config fragments (e.g., `logger:wandb`). Tyro expects the base experiment to be declared first, and reversing the order can lead to confusing resolution errors.
+>
+> This repository disables Tyro flag conversion (`tyro.conf.FlagConversionOff`), so nested overrides should use the exact underscore field names defined in the dataclasses. Example:
+>
+> `--command.setup_terms.motion_command.params.motion_config.motion_file`
 
 ### Logging with Weights & Biases
 

@@ -33,6 +33,11 @@ source scripts/source_inference_setup.sh    # Activate the virtual environment
 
 Select the appropriate workflow guide based on your setup:
 
+> **Documentation note**: This file is the canonical inference/deployment guide.
+> The `deploy/INFERENCE.md` quick reference is useful for short runtime commands,
+> but use this `src/` README for full parameter details, policy options, and
+> deployment workflows.
+
 #### Real Robot Deployment
 - **[Real Robot Locomotion](docs/workflows/real-robot-locomotion.md)** - Run locomotion policies on physical Unitree G1 or Booster T1 robots
 - **[Real Robot Whole Body Tracking](docs/workflows/real-robot-wbt.md)** - Run WBT policies on physical Unitree G1 robots

@@ -29,6 +29,20 @@ src/
 - **[Dataset Preparation](src/holosoma_data/README.md)** - Download and prepare OMOMO, AMASS/SFU, and LAFAN datasets
 - **[Installation Guide](deploy/INSTALL.md)** - Environment setup (local conda or Apptainer)
 
+Operational deploy quick references:
+
+- **[Training](deploy/TRAINING.md)** — training quick reference and cluster commands
+- **[Evaluation](deploy/EVALUATION.md)** — evaluation and ONNX export quick reference
+- **[Inference](deploy/INFERENCE.md)** — inference and sim-to-sim quick reference
+- **[Retargeting](deploy/RETARGETING.md)** — retargeting and data conversion quick reference
+
+> **Documentation roles:**
+> - `deploy/` contains short operational command snippets and job examples.
+> - `src/` contains the canonical, authoritative reference for configuration,
+>   workflow details, and task behavior.
+> - If the two disagree, prefer the `src/` module README files and update those
+>   first.
+
 ## Quick Start
 
 ### Setup

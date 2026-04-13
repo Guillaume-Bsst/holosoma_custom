@@ -9,6 +9,11 @@ source scripts/source_retargeting_setup.sh    # run from holosoma/ root
 cd src/holosoma_retargeting/holosoma_retargeting
 ```
 
+> **Documentation note**: This is the canonical retargeting guide. The
+> `deploy/RETARGETING.md` quick reference is for short command snippets only. If
+> you need exact flag syntax, task behavior, or dataset requirements, prefer
+> this source README.
+
 **Data Requirements**: The retargeting pipeline requires motion data in world joint positions. For custom data, you need to prepare world joint positions in shape `(T, J, 3)` where T is the number of frames and J is the number of joints, and modify `demo_joints` and `joints_mapping` defined in `config_types/data_type.py`.
 
 **Dataset uniformity**: All datasets (OMOMO, AMASS/SFU, LAFAN) are stored as pre-processed files in `holosoma_data/datasets/`. Each dataset has a preparation script in `data_utils/` that converts raw downloaded data into the format expected by the retargeting pipeline. All retargeters (OmniRetarget, GMR, Test) can process any dataset. See [Dataset Preparation](../../holosoma_data/README.md).
