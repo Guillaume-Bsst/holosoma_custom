@@ -95,6 +95,8 @@ chmod +x *.sh
 
     conda activate hssim
     pip install warp-lang mujoco-warp
+    pip install -e /workspace/holosoma/src/holosoma_data
+    pip install -e /workspace/holosoma/src/holosoma
     conda deactivate
 EOF
 

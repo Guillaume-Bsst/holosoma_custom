@@ -14,6 +14,11 @@
 BASE_DIR="$(cd "$SLURM_SUBMIT_DIR/../../.." && pwd)"
 SIF_FILE="${BASE_DIR}/deploy/cluster/holosoma.sif"
 
+# Define SCRATCH if not set (use $SLURM_TMPDIR or /tmp as fallback)
+if [ -z "$SCRATCH" ]; then
+    SCRATCH="${SLURM_TMPDIR:-/tmp}/scratch_$$"
+fi
+
 cd "${BASE_DIR}"
 
 mkdir -p slurm_logs
@@ -50,6 +55,8 @@ apptainer exec --nv \
     export TEMP=/tmp && \
     source /root/.holosoma_deps/miniconda3/etc/profile.d/conda.sh && \
     conda activate hssim && \
+    pip install -e /workspace/holosoma/src/holosoma_data && \
+    pip install -e /workspace/holosoma/src/holosoma && \
     export WANDB_INSECURE_DISABLE_SSL=true && \
     cd /workspace/holosoma && \
     xvfb-run -a python src/holosoma/holosoma/train_agent.py \

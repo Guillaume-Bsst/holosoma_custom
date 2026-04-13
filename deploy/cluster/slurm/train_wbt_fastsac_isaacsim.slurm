@@ -60,9 +60,8 @@ apptainer exec --nv \
     export WANDB_INSECURE_DISABLE_SSL=true && \
     cd /workspace/holosoma && \
     xvfb-run -a python src/holosoma/holosoma/train_agent.py \
-        exp:g1-27dof-wbt-isaacsim \
+        exp:g1-27dof-wbt-fast-sac-isaacsim \
         logger:wandb \
         --logger.video.enabled=False \
-        --training.num-envs=8192 \
         --command.setup-terms.motion-command.params.motion-config.motion-file=\"holosoma/data/motions/g1_29dof/whole_body_tracking/sub3_largebox_003_mj_27dof_fps50.npz\"
 "
