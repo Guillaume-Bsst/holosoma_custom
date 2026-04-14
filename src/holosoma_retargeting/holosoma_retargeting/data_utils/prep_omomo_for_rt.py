@@ -412,18 +412,29 @@ def process_sequence(
         except Exception:
             pass
 
-    # Shift Y by -floor_y
+    # Shift Y by -floor_y (floor norm in the -π/2 intermediate frame, same as InterAct)
     joint_positions[:, :, 1] -= floor_y
     if has_object:
         obj_world_trans[:, 1] -= floor_y
+
+    # ------------------------------------------------------------------
+    # Step 7 — apply +π/2 around X to go back to Z-up world frame
+    # (mirrors what interact2mimic.py does after process_omomo output)
+    # ------------------------------------------------------------------
+    rx_inv = Rotation.from_euler("x", np.pi / 2)
+
+    joint_positions = rx_inv.apply(joint_positions.reshape(-1, 3)).reshape(T, num_body_joints, 3)
 
     height = compute_height(bm_dict, betas, gender)
 
     if not has_object:
         return joint_positions, height, None
 
-    quat_xyzw = Rotation.from_matrix(obj_rot_rx).as_quat()   # T X 4 xyzw
-    quat_wxyz = quat_xyzw[:, [3, 0, 1, 2]]                   # T X 4 wxyz
+    obj_world_trans = rx_inv.apply(obj_world_trans)          # T X 3
+    obj_rot_final   = (rx_inv * Rotation.from_matrix(obj_rot_rx)).as_matrix()  # T X 3 X 3
+
+    quat_xyzw = Rotation.from_matrix(obj_rot_final).as_quat()   # T X 4 xyzw
+    quat_wxyz = quat_xyzw[:, [3, 0, 1, 2]]                      # T X 4 wxyz
     object_poses = np.concatenate(
         [quat_wxyz, obj_world_trans], axis=1
     ).astype(np.float32)  # T X 7  [qw, qx, qy, qz, x, y, z]
@@ -495,7 +506,7 @@ def main(cfg: Config) -> None:
                 obj_mesh_path = None
 
             global_joint_positions, height, object_poses = process_sequence(
-                seq, bm_dict, obj_mesh_path=obj_mesh_path
+                seq, bm_dict, smplh_male_npz, obj_mesh_path=obj_mesh_path
             )
 
             save_data = dict(global_joint_positions=global_joint_positions, height=height)

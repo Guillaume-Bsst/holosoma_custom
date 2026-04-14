@@ -1,6 +1,7 @@
 # Large binary datasets — not tracked, must be downloaded/generated locally
 holosoma_data/datasets/
 holosoma_data/objects/
+holosoma_data/original_datasets/
 
 # Python artifacts
 __pycache__/
