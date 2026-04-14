@@ -1,0 +1,29 @@
+{
+  "folders": [
+    {
+      "path": "."
+    },
+    {
+      "path": "src/holosoma_data/holosoma_data/third_party/InterAct"
+    },
+    {
+      "path": "src/holosoma_data/holosoma_data/third_party/InterMimic"
+    },
+    {
+      "path": "src/holosoma_inference/holosoma_inference/third_party/unitree_ros2"
+    },
+    {
+      "path": "src/holosoma_retargeting/holosoma_retargeting/third_party/GMR"
+    },
+    {
+      "path": "src/holosoma_inference/holosoma_inference/third_party/unitree_ros2/cyclonedds_ws/src/unitree_description"
+    },
+    {
+      "path": "src/holosoma_inference/holosoma_inference/third_party/unitree_ros2/cyclonedds_ws/src/unitree_control_interface"
+    },
+    {
+      "path": "src/holosoma_inference/holosoma_inference/third_party/unitree_ros2/cyclonedds_ws/src/unitree_simulation"
+    }
+  ],
+  "settings": {}
+}

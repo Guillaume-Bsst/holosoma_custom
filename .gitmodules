@@ -1,0 +1,27 @@
+[submodule "src/holosoma_data/holosoma_data/third_party/InterAct"]
+	path = src/holosoma_data/holosoma_data/third_party/InterAct
+	url = https://github.com/wzyabcas/InterAct
+
+[submodule "src/holosoma_data/holosoma_data/third_party/InterMimic"]
+	path = src/holosoma_data/holosoma_data/third_party/InterMimic
+	url = https://github.com/Sirui-Xu/InterMimic
+
+[submodule "src/holosoma_inference/holosoma_inference/third_party/unitree_ros2"]
+	path = src/holosoma_inference/holosoma_inference/third_party/unitree_ros2
+	url = git@github.com:unitreerobotics/unitree_ros2.git
+
+[submodule "src/holosoma_retargeting/holosoma_retargeting/third_party/GMR"]
+	path = src/holosoma_retargeting/holosoma_retargeting/third_party/GMR
+	url = https://github.com/YanjieZe/GMR.git
+
+[submodule "src/holosoma_inference/holosoma_inference/third_party/unitree_ros2/cyclonedds_ws/src/unitree_description"]
+	path = src/holosoma_inference/holosoma_inference/third_party/unitree_ros2/cyclonedds_ws/src/unitree_description
+	url = git@github.com:inria-paris-robotics-lab/unitree_description.git
+
+[submodule "src/holosoma_inference/holosoma_inference/third_party/unitree_ros2/cyclonedds_ws/src/unitree_control_interface"]
+	path = src/holosoma_inference/holosoma_inference/third_party/unitree_ros2/cyclonedds_ws/src/unitree_control_interface
+	url = git@github.com:inria-paris-robotics-lab/unitree_control_interface.git
+
+[submodule "src/holosoma_inference/holosoma_inference/third_party/unitree_ros2/cyclonedds_ws/src/unitree_simulation"]
+	path = src/holosoma_inference/holosoma_inference/third_party/unitree_ros2/cyclonedds_ws/src/unitree_simulation
+	url = git@github.com:inria-paris-robotics-lab/unitree_simulation.git
