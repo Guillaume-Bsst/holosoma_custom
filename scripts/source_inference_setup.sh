@@ -5,8 +5,8 @@ elif [ -n "${ZSH_VERSION}" ]; then
     SCRIPT_DIR=$( cd -- "$( dirname -- "${(%):-%x}" )" &> /dev/null && pwd )
 fi
 source ${SCRIPT_DIR}/source_common.sh
-source ${CONDA_ROOT}/bin/activate hsinference
-export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CONDA_ROOT}/envs/hsinference/lib/python3.11/site-packages/lib
+source ${CONDA_ROOT}/bin/activate hscinference
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CONDA_ROOT}/envs/hscinference/lib/python3.11/site-packages/lib
 
 # Ensure holosoma_inference is installed (editable mode)
 if ! python -c "import holosoma_inference" 2>/dev/null; then

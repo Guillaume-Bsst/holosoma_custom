@@ -31,7 +31,7 @@ esac
 
 # Create overall workspace
 source ${SCRIPT_DIR}/source_common.sh
-ENV_ROOT=$CONDA_ROOT/envs/hsinference
+ENV_ROOT=$CONDA_ROOT/envs/hscinference
 
 SENTINEL_FILE=${WORKSPACE_DIR}/.env_setup_finished_inference
 
@@ -65,10 +65,10 @@ if [[ ! -f $SENTINEL_FILE ]]; then
     $CONDA_ROOT/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
     $CONDA_ROOT/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
     $CONDA_ROOT/bin/conda install -y mamba -c conda-forge -n base
-    MAMBA_ROOT_PREFIX=$CONDA_ROOT $CONDA_ROOT/bin/mamba create -y -n hsinference python=3.10 -c conda-forge --override-channels
+    MAMBA_ROOT_PREFIX=$CONDA_ROOT $CONDA_ROOT/bin/mamba create -y -n hscinference python=3.10 -c conda-forge --override-channels
   fi
 
-  source $CONDA_ROOT/bin/activate hsinference
+  source $CONDA_ROOT/bin/activate hscinference
 
   # Install libstdcxx-ng to fix the error: `version `GLIBCXX_3.4.32' not found` on Ubuntu 24.04
   # Only needed on Linux (not macOS)

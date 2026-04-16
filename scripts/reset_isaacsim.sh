@@ -15,7 +15,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 ROOT_DIR=$(dirname "$SCRIPT_DIR")
 
 source ${SCRIPT_DIR}/source_common.sh
-ENV_ROOT=$CONDA_ROOT/envs/hssim
+ENV_ROOT=$CONDA_ROOT/envs/hscsim
 SENTINEL_FILE=${WORKSPACE_DIR}/.env_setup_finished_isaacsim
 
 rm -rf $ENV_ROOT

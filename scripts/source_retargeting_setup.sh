@@ -6,7 +6,7 @@ elif [ -n "${ZSH_VERSION}" ]; then
 fi
 
 # Force the environment name for this simulator
-CONDA_ENV_NAME=hsretargeting
+CONDA_ENV_NAME=hscretargeting
 echo "conda environment name is set to: $CONDA_ENV_NAME"
 
 source ${SCRIPT_DIR}/source_common.sh

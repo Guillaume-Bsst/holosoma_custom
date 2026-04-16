@@ -49,8 +49,8 @@ done
 
 # Create overall workspace
 
-# Use CONDA_ENV_NAME if provided, otherwise default to "hsmujoco"
-CONDA_ENV_NAME=${CONDA_ENV_NAME:-hsmujoco}
+# Use CONDA_ENV_NAME if provided, otherwise default to "hscmujoco"
+CONDA_ENV_NAME=${CONDA_ENV_NAME:-hscmujoco}
 echo "conda environment name is set to: $CONDA_ENV_NAME"
 
 source ${SCRIPT_DIR}/source_common.sh

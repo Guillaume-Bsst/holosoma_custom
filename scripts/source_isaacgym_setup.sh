@@ -5,7 +5,7 @@ elif [ -n "${ZSH_VERSION}" ]; then
     SCRIPT_DIR=$( cd -- "$( dirname -- "${(%):-%x}" )" &> /dev/null && pwd )
 fi
 # Force the environment name for this simulator
-CONDA_ENV_NAME=hsgym
+CONDA_ENV_NAME=hscgym
 echo "conda environment name is set to: $CONDA_ENV_NAME"
 
 source ${SCRIPT_DIR}/source_common.sh
