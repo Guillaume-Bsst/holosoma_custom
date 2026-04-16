@@ -1,4 +1,4 @@
-WORKSPACE_DIR=$HOME/.holosoma_deps
+WORKSPACE_DIR=${WORKSPACE_DIR:-$HOME/.holosoma_custom_deps}
 CONDA_ROOT=$WORKSPACE_DIR/miniconda3
 
 # Fully clean any conda state from the current shell to prevent PATH pollution
