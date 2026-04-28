@@ -152,7 +152,6 @@ wbt_g1_27dof = ObservationConfig(
             "dof_pos",
             "dof_vel",
             "actions",
-            "projected_gravity",
         ]
     },
     obs_dims={
@@ -164,7 +163,6 @@ wbt_g1_27dof = ObservationConfig(
         "dof_pos": 27,
         "dof_vel": 27,
         "actions": 27,
-        "projected_gravity": 3,
     },
     obs_scales={
         "actions": 1.0,
@@ -177,10 +175,9 @@ wbt_g1_27dof = ObservationConfig(
         "dof_vel": 1.0,
         "robot_body_pos_b": 1.0,
         "robot_body_ori_b": 1.0,
-        "projected_gravity": 1.0,
     },
     history_length_dict={
-        "actor_obs": 5,
+        "actor_obs": 1,
     },
 )
 
