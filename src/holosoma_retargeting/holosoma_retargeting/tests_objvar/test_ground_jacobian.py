@@ -68,3 +68,36 @@ def test_ground_jacobian_is_insensitive_to_robot_joints():
     n_obj_cols = 7                                        # pose objet = 7 coords qpos
     np.testing.assert_allclose(J[:, :-n_obj_cols], 0.0, atol=1e-12)
     assert np.abs(J[:, -n_obj_cols:]).max() > 1e-6, "les colonnes objet ne doivent PAS etre nulles"
+
+
+def test_ground_values_track_current_object_pose(tmp_path):
+    """Couverture bout-en-bout du Step 5 (revue task-1) : la jacobienne seule ne suffit
+    pas -- elle doit lineariser autour de la MEME pose objet que celle utilisee pour la
+    valeur des sommets sol dans le bloc entite. Un decalage de placement des lignes (g0)
+    ou un bloc de valeurs sol reste fige a l'ancre de frame passeraient tous les deux
+    silencieusement les deux tests ci-dessus (isoles, sans passer par solve_single_iteration
+    / retarget_motion). Repere par revue : sans le fix des valeurs, l'objet derive
+    d'environ 1.6 m par rapport a son ancre de frame des la 2e iteration SQP (gradient
+    fantome -- le QP applique indefiniment une correction que lap0 ne reduit jamais).
+
+    Tolerance 0.2 m : large devant la derive residuelle mesuree avec le fix (24-34 mm sur
+    les frames 0 et 5 d'une sequence de 6, sweep independant), mais tres en dessous de la
+    derive sans le fix -- doit donc echouer sur le code d'avant le fix (verifie a la main
+    en stashant le fix avant de committer ce test).
+    """
+    from tests_objvar.largebox_fixture import build_largebox_inputs
+    from holosoma_retargeting.config_types.task import TaskConfig
+    from holosoma_retargeting.examples.robot_retarget import create_ground_points
+
+    r, mk = build_largebox_inputs(3, {"object_variable": True})
+    cfg = TaskConfig()
+    mk["ground_points_world"] = create_ground_points(
+        cfg.climbing_ground_range, cfg.climbing_ground_range, cfg.climbing_ground_size)
+    out = str(tmp_path / "ground_composed.npz")
+    r.retarget_motion(dest_res_path=out, **mk)
+    qpos = np.load(out)["qpos"]
+    ref = mk["object_poses_augmented"][:3]                # ancre de frame [pos(3), quat wxyz(4)]
+
+    for t in range(3):
+        dpos = np.linalg.norm(qpos[t, -7:-4] - ref[t, :3])
+        assert dpos < 0.2, f"frame {t}: objet a {dpos * 1000:.1f} mm de son ancre de frame"

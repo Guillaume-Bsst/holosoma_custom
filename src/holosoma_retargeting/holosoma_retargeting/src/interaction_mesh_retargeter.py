@@ -683,6 +683,17 @@ class InteractionMeshRetargeter:
                 J_V[3 * (g0 + k) : 3 * (g0 + k + 1), :] = \
                     self._calc_ground_vertex_jacobian(self.ground_points_world[k])
 
+        # La VALEUR des sommets sol doit suivre la meme pose objet que la jacobienne
+        # ci-dessus (q, l'iteree SQP courante) -- sinon on linearise autour d'un point
+        # que lap0 (plus bas) ne refletera jamais : gradient fantome, la meme correction
+        # se reapplique a chaque iteration sans jamais reduire le residu qu'elle promet.
+        # obj_pts_local (l'entree, figee a la pose ancre de la frame) n'est PAS mutee --
+        # on rebind sur une copie locale.
+        if self.object_variable and self.n_ground_pts:
+            obj_pts_local = np.array(obj_pts_local, dtype=float, copy=True)
+            obj_pts_local[-self.n_ground_pts:] = transform_points_world_to_local(
+                q[-4:], q[-7:-4], np.asarray(self.ground_points_world, dtype=float))
+
         robot_pts_local = np.array([p_OC_dict[k] for k in robot_link_keys])
         vertices = np.vstack([robot_pts_local, obj_pts_local])  # (V x 3)
 
