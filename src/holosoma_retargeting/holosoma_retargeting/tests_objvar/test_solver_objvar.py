@@ -15,6 +15,43 @@ def test_flag_off_bit_identical(tmp_path):
     assert np.array_equal(qpos, base), np.abs(qpos - base).max()
 
 
+def test_flag_off_with_ground_bit_identical(tmp_path):
+    """Meme garde-fou que ci-dessus, mais sol ON -- la configuration des six pivots DEJA
+    PUBLIES de la campagne sol-seul (2026-08-03), que `test_flag_off_bit_identical` ne
+    couvre pas : sa fixture passe `ground_points_world=None`, donc elle ne traverse ni les
+    deux blocs sol de `solve_single_iteration` ni `_calc_ground_vertex_jacobian`.
+
+    Ces blocs sont gardes par `self.object_variable`, ce qui doit rendre le chemin flag-off
+    bit-identique a la revision d'AVANT la tache 1 meme quand la grille de sol est presente.
+    `data/baseline_largebox_ground_15f.npz` a ete produit sur cette revision de base
+    (`8f42d33`, ou le `NotImplementedError` objvar+sol etait encore en place), par ce meme
+    chemin, et verifie deterministe (deux runs bit-identiques) avant d'etre committe.
+
+    Non-vacuite : la seconde assertion exige que la grille change effectivement la
+    trajectoire. Sans elle, une regression qui IGNORERAIT `ground_points_world` passerait
+    silencieusement (le baseline l'ignorerait tout autant), et le test ne couvrirait rien.
+    """
+    from tests_objvar.largebox_fixture import build_largebox_inputs
+    from holosoma_retargeting.config_types.task import TaskConfig
+    from holosoma_retargeting.examples.robot_retarget import create_ground_points
+
+    r, mk = build_largebox_inputs(15, {})
+    assert not r.object_variable, "ce test porte sur le chemin FLAG OFF"
+    cfg = TaskConfig()
+    mk["ground_points_world"] = create_ground_points(
+        cfg.climbing_ground_range, cfg.climbing_ground_range, cfg.climbing_ground_size)
+    out = str(tmp_path / "off_ground.npz")
+    r.retarget_motion(dest_res_path=out, **mk)
+    qpos = np.load(out)["qpos"]
+
+    base = np.load("tests_objvar/data/baseline_largebox_ground_15f.npz")["qpos"]
+    assert np.array_equal(qpos, base), np.abs(qpos - base).max()
+
+    no_ground = np.load("tests_objvar/data/baseline_largebox_15f.npz")["qpos"]
+    assert np.abs(qpos - no_ground).max() > 1e-6, \
+        "la grille de sol n'a eu aucun effet -- ce test ne couvre alors plus le chemin sol"
+
+
 def test_strong_anchor_recovers_fixed_object(tmp_path):
     qpos, mk = _run(15, {"object_variable": True, "w_object_tracking": 1e6}, tmp_path, "strong")
     ref = mk["object_poses_augmented"][:15]        # ordre mujoco [pos(3), quat wxyz(4)]
