@@ -477,8 +477,8 @@ class IsaacSim(BaseSimulator):
                         solver_position_iteration_count=8,
                         solver_velocity_iteration_count=4,
                     ),
-                    # requis par le convertisseur URDF même pour un corps sans joint (table rigide) :
-                    # gains nuls (aucun drive), comme l'objet box ci-dessus.
+                    # required by the URDF converter even for a jointless body (rigid table):
+                    # zero gains (no drive), like the box object above.
                     joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
                         gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
                     ),

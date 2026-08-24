@@ -58,8 +58,9 @@ actor_obs_w_object = ObsGroupCfg(
             scale=1.0,
             noise=0.05,
         ),
-        # Table (support statique) : le robot la VOIT pour se placer correctement (dépôt) et ne pas
-        # foncer dedans. Pose relative au torse, avec le même bruit de perception que la box.
+        # Table (static support): the robot SEES it, so it can place itself correctly (drop-off)
+        # and not barge into it. Pose relative to the torso, with the same perception noise as the
+        # box.
         "support_pos_b": ObsTermCfg(
             func="holosoma.managers.observation.terms.wbt:support_pos_b",
             scale=1.0,

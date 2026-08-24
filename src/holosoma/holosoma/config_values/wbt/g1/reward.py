@@ -132,10 +132,10 @@ g1_29dof_wbt_reward_w_object = RewardManagerCfg(
             params={"sigma": 0.03},
             weight=1.0,
         ),
-        # robot<->TABLE : même reward de contact de surface (witness + SDF) que pour la box, mais
-        # sur l'objet statique table. Apprend au robot à placer sa main au bon endroit près de la
-        # table (approche/dépôt) et à ne pas foncer dedans. Neutre si le clip ne porte pas de table.
-        # Poids plus faible que la box (signal secondaire de placement, pas la tâche principale).
+        # robot<->TABLE: same surface-contact reward (witness + SDF) as for the box, but on the
+        # static table object. Teaches the robot to put its hand in the right spot near the table
+        # (approach/drop-off) and not to barge into it. Neutral if the clip carries no table.
+        # Lower weight than the box (secondary placement signal, not the main task).
         "support_surface_contact_error_exp": RewardTermCfg(
             func="holosoma.managers.reward.terms.wbt:support_surface_contact_error_exp",
             params={"sigma_geodesic": 0.1, "sigma_dist": 0.05},
@@ -147,7 +147,7 @@ g1_29dof_wbt_reward_w_object = RewardManagerCfg(
 g1_29dof_wbt_reward_w_object_actor = RewardManagerCfg(
     terms={
         **g1_29dof_wbt_reward_w_object.terms,
-        # C-D lite : proximité relative mains↔objet, β-pondérée (raffineur, petit poids).
+        # C-D lite: relative hand<->object proximity, beta-weighted (refiner, small weight).
         "motion_relative_hand_object_position_error_exp": RewardTermCfg(
             func="holosoma.managers.reward.terms.wbt:motion_relative_hand_object_position_error_exp",
             params={"sigma": 0.3},

@@ -210,7 +210,7 @@ def obj_ori_b(env: WholeBodyTrackingManager) -> torch.Tensor:
 
 
 def support_pos_b(env: WholeBodyTrackingManager) -> torch.Tensor:
-    """Position de la table (objet statique) dans le repère torse -> le robot SAIT où elle est."""
+    """Table (static object) position in the torso frame -> the robot KNOWS where it is."""
     motion_command = _get_motion_command_and_assert_type(env)
     pos, _ = subtract_frame_transforms(
         motion_command.robot_ref_pos_w,
@@ -222,7 +222,7 @@ def support_pos_b(env: WholeBodyTrackingManager) -> torch.Tensor:
 
 
 def support_ori_b(env: WholeBodyTrackingManager) -> torch.Tensor:
-    """Orientation de la table dans le repère torse (2 premières colonnes de la matrice)."""
+    """Table orientation in the torso frame (first 2 columns of the matrix)."""
     motion_command = _get_motion_command_and_assert_type(env)
     _, ori = subtract_frame_transforms(
         motion_command.robot_ref_pos_w,

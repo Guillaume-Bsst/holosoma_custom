@@ -3,7 +3,7 @@ from scipy.spatial.transform import Rotation
 
 
 def _obj_frame_pos(r, q, link_name):
-    """Position monde->repere objet du lien, par FK mujoco (verite terrain du test)."""
+    """Link position, world->object frame, via mujoco FK (the test's ground truth)."""
     import mujoco
     r.robot_data.qpos[:] = q
     mujoco.mj_forward(r.robot_model, r.robot_data)
@@ -17,7 +17,7 @@ def test_object_relative_jacobian_finite_differences():
     from tests_objvar.largebox_fixture import build_largebox_inputs
     r, mk = build_largebox_inputs(2, {"object_variable": True})
     q = np.load("tests_objvar/data/baseline_largebox_15f.npz")["qpos"][5].copy()
-    # pose objet non triviale (rotation + translation) pour exciter tous les termes
+    # non-trivial object pose (rotation + translation) to excite every term
     q[-7:-4] += np.array([0.11, -0.07, 0.05])
     q[-4:] = Rotation.from_euler("xyz", [0.3, -0.2, 0.4]).as_quat()[[3, 0, 1, 2]]
 
@@ -31,9 +31,9 @@ def test_object_relative_jacobian_finite_differences():
         qp, qm = q.copy(), q.copy()
         qp[qi] += eps
         qm[qi] -= eps
-        for qq in (qp, qm):               # renorm des quats perturbes (base + objet)
+        for qq in (qp, qm):               # renormalize the perturbed quats (base + object)
             qq[3:7] /= np.linalg.norm(qq[3:7])
             qq[-4:] /= np.linalg.norm(qq[-4:])
         fd = (_obj_frame_pos(r, qp, link) - _obj_frame_pos(r, qm, link)) / (2 * eps)
         np.testing.assert_allclose(J[:, col], fd, atol=5e-5,
-                                   err_msg=f"colonne {col} (qpos {qi})")
+                                   err_msg=f"column {col} (qpos {qi})")

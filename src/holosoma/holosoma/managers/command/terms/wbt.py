@@ -212,10 +212,10 @@ class MotionLoader:
                 self.support_mesh = ""
                 self._support_half_extents = torch.zeros(3, device=device)
 
-            # Reference robot<->support contact (SYMETRIQUE de object_ref_* : meme forme, calculee
-            # par add_support_contact.py = poignet -> surface table, witness + distance). Sert au
-            # reward support_surface_contact_error_exp (le robot apprend a placer sa main pres de
-            # la table, pas a foncer dedans). Frames T (T,) / witness (T,3) LOCAL table.
+            # Reference robot<->support contact (SYMMETRIC to object_ref_*: same shape, computed
+            # by add_support_contact.py = wrist -> table surface, witness + distance). Feeds the
+            # support_surface_contact_error_exp reward (the robot learns to place its hand near the
+            # table, not to barge into it). Frames T (T,) / witness (T,3) table-LOCAL.
             self.has_support_contact = self.has_support and "support_ref_contact" in data
             if self.has_support_contact:
                 self._support_ref_contact = torch.tensor(data["support_ref_contact"], dtype=torch.bool, device=device)
@@ -376,7 +376,7 @@ class MotionLoader:
                     dim=0,
                 )
 
-        # support (table) contact reference : meme padding "pas de contact" sur la transition.
+        # support (table) contact reference: same "no contact" padding on the transition.
         if getattr(self, "has_support_contact", False):
             n_seg = segments["joint_pos"].shape[0]
             s_contact = torch.zeros(n_seg, dtype=torch.bool, device=self._support_ref_contact.device)
@@ -1219,7 +1219,7 @@ class MotionCommand(CommandTermBase):
                             ref_lin_vel - cur[:, 7:10]
                         )
                         rel = quat_mul(ref_quat, quat_inverse(cur[:, 3:7], w_last=True), w_last=True)
-                        # NB: le 2e retour de quat_to_angle_axis est déjà le rotation VECTOR (axe*angle)
+                        # NB: quat_to_angle_axis's 2nd return is already the rotation VECTOR (axis*angle)
                         rotvec = quat_to_angle_axis(rel)[1]
                         torque = cfg_gs.force_assist_kp_rot * rotvec - cfg_gs.force_assist_kd_rot * cur[:, 10:13]
                         # Cache the per-env masses / weights once: both come from the STARTUP mass
@@ -1515,9 +1515,9 @@ class MotionCommand(CommandTermBase):
         return self._env.simulator.all_root_states[self.object_indices_in_simulator][:, 7:10]
 
     #########################################################################################
-    ## Support (table) : objet STATIQUE. Pose monde = pose clip + env origin (l'acteur est
-    ## planté à cette pose au reset, donc pas besoin de lire son root state -> moins de
-    ## plomberie). Consommée par l'obs (le robot voit la table) et le reward robot<->table.
+    ## Support (table): STATIC object. World pose = clip pose + env origin (the actor is pinned
+    ## at that pose on reset, so there is no need to read its root state -> less plumbing).
+    ## Consumed by the obs (the robot sees the table) and by the robot<->table reward.
     #########################################################################################
     @property
     def support_pos_w(self) -> torch.Tensor:
@@ -1581,10 +1581,11 @@ class MotionCommand(CommandTermBase):
 
     @property
     def object_termination_enabled(self) -> bool:
-        """False quand le force-mode assist est sous object_term_min_alpha : un drop de la box ne
-        tue plus l'épisode (la policy encaisse la perte de reward objet et peut apprendre à
-        récupérer) — sinon le success EMA s'effondre au passage bas-alpha et le curriculum se
-        re-bloque exactement comme avec le blend. Lu par la termination bad_tracking."""
+        """False when the force-mode assist is below object_term_min_alpha: dropping the box no
+        longer kills the episode (the policy absorbs the loss of object reward and can learn to
+        recover) -- otherwise the success EMA collapses on the low-alpha transition and the
+        curriculum re-stalls exactly as it did with the blend. Read by the bad_tracking
+        termination."""
         cfg = self.grasp_settle_cfg
         return not (
             cfg.physicality_force_mode
@@ -1611,20 +1612,20 @@ class MotionCommand(CommandTermBase):
         if not (cfg.physicality_curriculum and cfg.kinematic_object_during_contact):
             return
         beta = cfg.physicality_ema_beta
-        # force mode: success = survie ET tracking objet. Chaque signal est lissé SÉPARÉMENT, puis
-        # on prend le min des DEUX EMA — surtout pas le min instantané avant lissage.
+        # force mode: success = survival AND object tracking. Each signal is smoothed SEPARATELY,
+        # then we take the min of the TWO EMAs -- never the instantaneous min before smoothing.
         #
-        # Pourquoi: `success_rate` est calculé sur les seuls envs qui resettent CE pas-là, soit
-        # ~4096/914 ≈ 4.5 envs — une moyenne de Bernoulli sur ~5 échantillons, donc extrêmement
-        # bruitée (alors qu'obj_track porte sur ~2000 envs en contact, quasi lisse). Or le min est
-        # concave: E[min(X,y)] << min(E[X],y) dès que X est bruité. Mesuré sur le run qsh0cwdo:
-        # les deux composantes tenaient ~0.89 pendant que le min-avant-lissage plafonnait à 0.830
-        # (prédiction du modèle binomial: 0.836) — 6 points de pénalité gratuite, qui rendaient un
-        # seuil à 0.90 inatteignable (il aurait fallu ~0.96 sur chaque composante).
-        # Le lissage étant linéaire, l'EMA de chaque signal converge vers sa VRAIE moyenne; le min
-        # de deux quantités convergées exprime bien l'intention ("les deux doivent être bons") sans
-        # importer le bruit. NB: à alpha=1 il n'y a pas de min, donc pas de biais — c'est pour ça
-        # que le warmup franchissait son gate normalement et que le blocage n'apparaissait qu'après.
+        # Why: `success_rate` is computed over only the envs that reset on THAT step, i.e.
+        # ~4096/914 ~= 4.5 envs -- a Bernoulli mean over ~5 samples, hence extremely noisy (whereas
+        # obj_track covers ~2000 envs in contact, nearly smooth). And the min is concave:
+        # E[min(X,y)] << min(E[X],y) as soon as X is noisy. Measured on run qsh0cwdo: both
+        # components held ~0.89 while the min-before-smoothing capped out at 0.830 (binomial model
+        # prediction: 0.836) -- 6 points of free penalty, which made a 0.90 threshold unreachable
+        # (it would have taken ~0.96 on each component).
+        # Smoothing being linear, each signal's EMA converges to its TRUE mean; the min of two
+        # converged quantities expresses the intent ("both must be good") without importing the
+        # noise. NB: at alpha=1 there is no min, hence no bias -- that is why the warmup cleared its
+        # gate normally and the stall only showed up afterwards.
         self._success_ema = (1.0 - beta) * self._success_ema + beta * float(success_rate)
         self._obj_track_ema = (1.0 - beta) * self._obj_track_ema + beta * float(self._obj_track_success)
         gate_signal = self._success_ema

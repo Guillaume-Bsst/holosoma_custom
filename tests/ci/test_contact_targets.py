@@ -8,20 +8,20 @@ from holosoma.utils.contact_targets import (
 
 
 def test_relative_position_object_at_origin_identity():
-    # objet à l'origine, quat identité (xyzw) -> rel == point
+    # object at the origin, identity quat (xyzw) -> rel == point
     point = torch.tensor([[1.0, 2.0, 3.0]])
     obj_pos = torch.zeros(1, 3)
-    obj_quat = torch.tensor([[0.0, 0.0, 0.0, 1.0]])  # xyzw identité
+    obj_quat = torch.tensor([[0.0, 0.0, 0.0, 1.0]])  # xyzw identity
     rel = relative_position_in_object_frame(point, obj_pos, obj_quat)
     assert torch.allclose(rel, point, atol=1e-6)
 
 
 def test_relative_position_yaw_90():
-    # objet à l'origine, +90° autour de z. Point monde (1,0,0) -> objet-local (0,-1,0).
+    # object at the origin, +90 deg about z. World point (1,0,0) -> object-local (0,-1,0).
     point = torch.tensor([[1.0, 0.0, 0.0]])
     obj_pos = torch.zeros(1, 3)
     s = 0.5**0.5
-    obj_quat = torch.tensor([[0.0, 0.0, s, s]])  # xyzw, +90° autour de z
+    obj_quat = torch.tensor([[0.0, 0.0, s, s]])  # xyzw, +90 deg about z
     rel = relative_position_in_object_frame(point, obj_pos, obj_quat)
     assert torch.allclose(rel, torch.tensor([[0.0, -1.0, 0.0]]), atol=1e-5)
 
@@ -63,7 +63,7 @@ def test_reward_decreases_with_error():
 
 
 def test_reward_ignores_hand_with_zero_beta():
-    # main 0 fautive mais β=0 ; main 1 parfaite -> reward ~ 1
+    # hand 0 is off but beta=0; hand 1 is perfect -> reward ~ 1
     rel_cur = torch.zeros(1, 2, 3)
     rel_cur[0, 0] = torch.tensor([1.0, 0.0, 0.0])
     rel_ref = torch.zeros(1, 2, 3)
@@ -73,7 +73,7 @@ def test_reward_ignores_hand_with_zero_beta():
 
 
 def test_reward_neutral_when_all_beta_zero():
-    # espace libre : toutes les mains loin -> β=0 -> reward neutre (=1), sans NaN
+    # free space: every hand far away -> beta=0 -> neutral reward (=1), no NaN
     rel_cur = torch.full((1, 2, 3), 5.0)
     rel_ref = torch.zeros(1, 2, 3)
     beta = torch.zeros(1, 2)
@@ -83,10 +83,10 @@ def test_reward_neutral_when_all_beta_zero():
 
 
 def test_relative_position_rotation_and_translation():
-    # objet en (1,0,0), tourné +90° autour de z ; point monde (1,1,0) -> objet-local (1,0,0)
+    # object at (1,0,0), rotated +90 deg about z; world point (1,1,0) -> object-local (1,0,0)
     point = torch.tensor([[1.0, 1.0, 0.0]])
     obj_pos = torch.tensor([[1.0, 0.0, 0.0]])
     s = 0.5**0.5
-    obj_quat = torch.tensor([[0.0, 0.0, s, s]])  # xyzw, +90° autour de z
+    obj_quat = torch.tensor([[0.0, 0.0, s, s]])  # xyzw, +90 deg about z
     rel = relative_position_in_object_frame(point, obj_pos, obj_quat)
     assert torch.allclose(rel, torch.tensor([[1.0, 0.0, 0.0]]), atol=1e-5)

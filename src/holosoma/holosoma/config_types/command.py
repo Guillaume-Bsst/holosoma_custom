@@ -358,9 +358,9 @@ class MotionConfig:
     """Probability of starting at timestep zero."""
 
     eval_start_at_zero: bool = False
-    """En eval (is_evaluating) : False (défaut) = départ à une frame ALÉATOIRE (RSI, comme
-    en training) ; True = forcer la frame 0 (eval déterministe/reproductible). N'affecte QUE
-    l'eval — en training la phase est déjà aléatoire indépendamment de ce flag."""
+    """In eval (is_evaluating): False (default) = start at a RANDOM frame (RSI, as in
+    training); True = force frame 0 (deterministic/reproducible eval). Affects ONLY the
+    eval -- in training the phase is already random regardless of this flag."""
 
     freeze_at_timestep_zero_prob: float = 0.0
     """When starting at timestep 0, probability of freezing motion counter at 0 (not advancing).
@@ -391,12 +391,12 @@ class MotionConfig:
     """Duration in seconds of the post-appended interpolation phase.
     Only used if enable_default_pose_append is True."""
 
-    # C-D lite : proximité relative mains↔objet (terme reward gaté sur le variant _actor)
+    # C-D lite: relative hand<->object proximity (reward term gated on the _actor variant)
     beta_scale: float = 0.1
-    """Échelle (m) de la décroissance du poids β = exp(-d_demo/beta_scale) ; ~1 au contact."""
+    """Decay scale (m) of the weight beta = exp(-d_demo/beta_scale); ~1 at contact."""
 
     hand_body_names: list[str] = field(default_factory=lambda: ["left_wrist_yaw_link", "right_wrist_yaw_link"])
-    """Liens des mains suivis par le terme C-D lite (repère objet)."""
+    """Hand links tracked by the C-D lite term (object frame)."""
 
     # noise related
     noise_to_initial_pose: NoiseToInitialPoseConfig = field(default_factory=NoiseToInitialPoseConfig)

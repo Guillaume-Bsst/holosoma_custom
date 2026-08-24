@@ -7,7 +7,7 @@ def test_objvar_indices_on():
     assert r.object_variable
     assert r.n_opt == r.nq_a + 7
     assert np.array_equal(r.q_opt_indices[-7:], np.arange(r.nq - 7, r.nq))
-    # le free joint objet est le 2e FREE du modele -> body id coherent
+    # the object free joint is the model's 2nd FREE joint -> consistent body id
     import mujoco
     free = [j for j in range(r.robot_model.njnt)
             if r.robot_model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE]

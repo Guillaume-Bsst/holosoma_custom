@@ -504,8 +504,8 @@ class InteractionMeshRetargeter:
                 adj_list = get_adjacency_list(source_tetrahedra, len(source_vertices))
                 target_laplacian = calculate_laplacian_coordinates(source_vertices, adj_list)
 
-                # Sonde de comptage (HOLOSOMA_MESH_STATS=1) : V, tétraèdres, mixage
-                # des arêtes par bloc — humain [0:H), entité1 [H:H+O), entité2 [H+O:V).
+                # Counting probe (HOLOSOMA_MESH_STATS=1): V, tetrahedra, edge mixing
+                # per block -- human [0:H), entity1 [H:H+O), entity2 [H+O:V).
                 if i == 0 and os.environ.get("HOLOSOMA_MESH_STATS"):
                     H = len(human_mapped_joints_in_object)
                     O = len(object_points_local_demo)
@@ -652,11 +652,11 @@ class InteractionMeshRetargeter:
             frame_idx: frame index used by explicit foot lock window constraints.
         """
         assert len(q_opt_n_last) == self.n_opt
-        q_a_n_last = q_opt_n_last[: self.nq_a]  # robot slice (les couts robot-only le lisent)
+        q_a_n_last = q_opt_n_last[: self.nq_a]  # robot slice (the robot-only costs read it)
 
-        # objvar: la tranche "last accepted" couvre robot ET objet -- la pose objet de
-        # q_locked ne sert plus que d'ancre par frame. Flag off: q_opt == q_a, chemin
-        # publie inchange (objet verrouille depuis q_locked).
+        # objvar: the "last accepted" slice covers robot AND object -- q_locked's object pose
+        # now only serves as a per-frame anchor. Flag off: q_opt == q_a, published path
+        # unchanged (object locked from q_locked).
         q = np.copy(q_locked)
         q[self.q_opt_indices] = q_opt_n_last
 
@@ -674,21 +674,20 @@ class InteractionMeshRetargeter:
         for i, key in enumerate(robot_link_keys):
             J_V[3 * i : 3 * (i + 1), :] = J_OC_dict[key]
 
-        # Sommets SOL : contrairement aux points de l'objet (constants dans son propre
-        # repere, donc jacobienne nulle), le sol est fixe dans le MONDE -- ses
-        # coordonnees en repere objet bougent avec la pose de l'objet.
+        # GROUND vertices: unlike the object points (constant in the object's own frame, hence
+        # a zero Jacobian), the ground is fixed in the WORLD -- its coordinates in object frame
+        # move with the object pose.
         if self.object_variable and self.n_ground_pts:
-            g0 = V_r + V_o - self.n_ground_pts        # 1er sommet sol dans le bloc entite
+            g0 = V_r + V_o - self.n_ground_pts        # 1st ground vertex in the entity block
             for k in range(self.n_ground_pts):
                 J_V[3 * (g0 + k) : 3 * (g0 + k + 1), :] = \
                     self._calc_ground_vertex_jacobian(self.ground_points_world[k])
 
-        # La VALEUR des sommets sol doit suivre la meme pose objet que la jacobienne
-        # ci-dessus (q, l'iteree SQP courante) -- sinon on linearise autour d'un point
-        # que lap0 (plus bas) ne refletera jamais : gradient fantome, la meme correction
-        # se reapplique a chaque iteration sans jamais reduire le residu qu'elle promet.
-        # obj_pts_local (l'entree, figee a la pose ancre de la frame) n'est PAS mutee --
-        # on rebind sur une copie locale.
+        # The ground vertex VALUES must track the same object pose as the Jacobian above (q, the
+        # current SQP iterate) -- otherwise we linearize around a point that lap0 (below) will
+        # never reflect: a phantom gradient, the same correction re-applied at every iteration
+        # without ever reducing the residual it promises. obj_pts_local (the input, frozen at the
+        # frame anchor pose) is NOT mutated -- we rebind onto a local copy.
         if self.object_variable and self.n_ground_pts:
             obj_pts_local = np.array(obj_pts_local, dtype=float, copy=True)
             obj_pts_local[-self.n_ground_pts:] = transform_points_world_to_local(
@@ -711,8 +710,8 @@ class InteractionMeshRetargeter:
         w_v = (self.laplacian_weights * np.ones(V)).astype(float)  # (V,)
         sqrt_w3 = np.sqrt(np.repeat(w_v, 3))
 
-        # Decision variables -- objvar: dq = [dqa (robot) ; dqo (objet, 7 coords qpos,
-        # quat additif + renormalisation comme la base flottante)]
+        # Decision variables -- objvar: dq = [dqa (robot); dqo (object, 7 qpos coords,
+        # additive quat + renormalization, like the floating base)]
         if self.object_variable:
             dq = cp.Variable(self.n_opt, name="dq")
             dqa = dq[: self.nq_a]
@@ -842,7 +841,7 @@ class InteractionMeshRetargeter:
             obj_terms.append(self.smooth_weight * cp.sum_squares(dq - dq_smooth))
         else:
             if self.object_variable:
-                raise NotImplementedError("objvar: smooth_weight non scalaire non gere")
+                raise NotImplementedError("objvar: non-scalar smooth_weight is not supported")
             Wsmooth = np.asarray(self.smooth_weight, dtype=float)
             if Wsmooth.ndim == 1:
                 obj_terms.append(cp.sum_squares(cp.multiply(np.sqrt(Wsmooth), dqa - dq_smooth)))
@@ -850,16 +849,16 @@ class InteractionMeshRetargeter:
                 # if a full matrix was supplied, fall back to quad_form
                 obj_terms.append(cp.quad_form(dqa - dq_smooth, Wsmooth))
 
-        # objvar: ancre faible de la pose objet vers la trajectoire d'entree (q_locked),
-        # analogue objet du nominal tracking ; 0 = mesh seul.
+        # objvar: weak anchor pulling the object pose toward the input trajectory (q_locked),
+        # the object analogue of nominal tracking; 0 = mesh only.
         if self.object_variable and self.w_object_tracking > 0:
-            # Double couverture quaternion : q et -q representent la meme rotation, donc
-            # rien ne garantit que q_locked (reference figee par frame) et q_opt_n_last
-            # (dernier itere accepte) vivent dans le meme hemisphere -- un flip de signe
-            # entre les deux ferait cibler l'ancre sur la representation antipodale et
-            # imprimerait une bascule physique a l'objet. On re-hemispherise la reference
-            # par iteration en l'alignant (produit scalaire > 0) sur le quat courant avant
-            # de former le residu additif.
+            # Quaternion double cover: q and -q represent the same rotation, so nothing
+            # guarantees that q_locked (the per-frame frozen reference) and q_opt_n_last (the
+            # last accepted iterate) live in the same hemisphere -- a sign flip between the two
+            # would make the anchor target the antipodal representation and impose a physical
+            # flip on the object. We re-hemispherise the reference at every iteration by
+            # aligning it (dot product > 0) with the current quat before forming the additive
+            # residual.
             obj_ref = q_locked[-7:].copy()
             if np.dot(obj_ref[3:], q_opt_n_last[self.nq_a + 3 :]) < 0:
                 obj_ref[3:] = -obj_ref[3:]
@@ -872,9 +871,9 @@ class InteractionMeshRetargeter:
         solver_kwargs = {"verbose": verbose}
         problem.solve(solver=cp.CLARABEL, **solver_kwargs)
         if (problem.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE)) and init_t:
-            # Repli infaisabilite frame-0 : on retire TOUTES les contraintes SOC (trust
-            # region), y compris le SOC objet -- meme traitement que le SOC robot publie,
-            # volontairement, pour laisser le premier pas s'ecarter sans borne de pas.
+            # Frame-0 infeasibility fallback: drop ALL SOC constraints (trust region),
+            # including the object SOC -- deliberately the same treatment as the published robot
+            # SOC, so the first step can move away without a step bound.
             constraints = [c for c in constraints if not isinstance(c, cp.constraints.second_order.SOC)]
             problem = cp.Problem(cp.Minimize(cp.sum(obj_terms)), constraints)
             problem.solve(solver=cp.CLARABEL, **solver_kwargs)
@@ -947,10 +946,10 @@ class InteractionMeshRetargeter:
             fromto[:] = 0.0
             dist = mujoco.mj_geomDistance(m, d, geom_a, geom_b, threshold, fromto)
             if dist <= threshold:
-                # Robustesse (notre patch) : a dist <= 0 le segment fromto degenere
-                # (normale nulle) -> jacobienne ~nulle -> QP infaisable. On saute la
-                # ligne : le contact exact est un frolement tolere, la contrainte
-                # reprend des que la paire se separe d'un epsilon.
+                # Robustness (our patch): at dist <= 0 the fromto segment degenerates (null
+                # normal) -> ~zero Jacobian -> infeasible QP. We skip the row: exact contact is
+                # a tolerated graze, and the constraint kicks back in as soon as the pair
+                # separates by an epsilon.
                 if dist <= 0.0:
                     if _first_iter:
                         print(f"[SelfCollision] skip degenerate pair "
@@ -1261,7 +1260,7 @@ class InteractionMeshRetargeter:
                 return False
             if contype[g2] == 0 and conaff[g2] == 0:
                 return False
-            # objvar: l'objet bouge -- sa non-penetration vs le sol entre dans le QP
+            # objvar: the object moves -- its non-penetration vs the ground enters the QP
             if not self.object_variable:
                 if self.object_name in self._geom_names[g1] and "ground" in self._geom_names[g2]:
                     return False
@@ -1481,15 +1480,15 @@ class InteractionMeshRetargeter:
         return J_XC_dict, p_XC_dict, P_WO
 
     def _calc_ground_vertex_jacobian(self, g_world: np.ndarray) -> np.ndarray:
-        """Jacobienne d'un point de SOL (fixe dans le monde) exprime dans le repere objet.
+        """Jacobian of a GROUND point (fixed in the world) expressed in the object frame.
 
-        Cas degenere de la branche robot de _calc_manipulator_jacobians : pour un point du
-        monde, d/dq [R_o^T (g - t_o)] = R_o^T (0 - J_objet_point_fixe@g) -- le terme
-        "point porte par le robot" est nul, le sol ne bougeant pas avec le robot. Reduite
-        aux q_opt_indices comme les lignes robot.
+        Degenerate case of the robot branch of _calc_manipulator_jacobians: for a world point,
+        d/dq [R_o^T (g - t_o)] = R_o^T (0 - J_object_fixed_point@g) -- the "point carried by the
+        robot" term is zero, since the ground does not move with the robot. Reduced to
+        q_opt_indices like the robot rows.
 
-        Suppose mj_forward deja appele pour la configuration courante (comme la branche
-        robot, qui lit robot_data.xpos).
+        Assumes mj_forward has already been called for the current configuration (like the robot
+        branch, which reads robot_data.xpos).
         """
         obj_quat = self.robot_data.qpos[-4:]
         obj_rot = Rotation.from_quat(

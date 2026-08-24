@@ -465,15 +465,15 @@ def convert_object_poses_to_mujoco_order(object_poses: np.ndarray) -> np.ndarray
     return object_poses[:, [4, 5, 6, 0, 1, 2, 3]]
 
 
-# Paires d'autocollision G1 par défaut (NOTRE configuration : le released n'en
-# fournit aucune — enable=False et pairs=[] partout). Couverture classique :
-# mains/coudes vs torse/pelvis/jambes, bras-bras, jambes croisées.
+# Default G1 self-collision pairs (OUR configuration: the released one provides
+# none -- enable=False and pairs=[] everywhere). Classic coverage:
+# hands/elbows vs torso/pelvis/legs, arm-arm, crossed legs.
 G1_SELF_COLLISION_PAIRS = [
     ("left_rubber_hand_link", "torso_link"), ("right_rubber_hand_link", "torso_link"),
     ("left_rubber_hand_link", "pelvis_contour_link"), ("right_rubber_hand_link", "pelvis_contour_link"),
     ("left_rubber_hand_link", "left_hip_pitch_link"), ("right_rubber_hand_link", "right_hip_pitch_link"),
-    # main-genou RETIREES du preset : frolement legitime des poses accroupies
-    # (pick au sol) -- meme philosophie que nos offsets calibres.
+    # hand-knee pairs REMOVED from the preset: crouched poses legitimately graze
+    # (ground pick) -- same philosophy as our calibrated offsets.
     ("left_elbow_link", "torso_link"), ("right_elbow_link", "torso_link"),
     ("left_rubber_hand_link", "right_rubber_hand_link"),
     ("left_wrist_yaw_link", "right_wrist_yaw_link"),
@@ -484,7 +484,7 @@ G1_SELF_COLLISION_PAIRS = [
 
 
 def _self_collision_with_default_pairs(sc):
-    """enable sans paires -> préset G1 (sinon passthrough)."""
+    """enable without pairs -> G1 preset (otherwise passthrough)."""
     if sc is not None and sc.enable and not sc.pairs:
         return dataclasses.replace(sc, pairs=list(G1_SELF_COLLISION_PAIRS))
     return sc

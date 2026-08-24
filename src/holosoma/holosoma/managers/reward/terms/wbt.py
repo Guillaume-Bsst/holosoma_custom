@@ -261,18 +261,18 @@ def object_flat_contact_quality_exp(env: WholeBodyTrackingManager, sigma: float)
 def support_surface_contact_error_exp(
     env: WholeBodyTrackingManager, sigma_geodesic: float, sigma_dist: float
 ) -> torch.Tensor:
-    """robot<->TABLE : pendant SYMETRIQUE de ``object_surface_contact_error_exp`` mais pour l'objet
-    STATIQUE support (la table). Sur les frames ou la REFERENCE approche la table (main proche,
-    ``support_ref_contact`` bake par add_support_contact.py), recompense la main courante a etre au
-    bon endroit de la SURFACE de la table (witness de reference ``support_ref_witness_local`` +
-    profondeur ``support_ref_contact_dist``), via le meme SDF-boite (demi-tailles du mesh table
-    ``support_half_extents``) et la geodesique de surface.
+    """robot<->TABLE: SYMMETRIC counterpart of ``object_surface_contact_error_exp``, but for the
+    STATIC support object (the table). On the frames where the REFERENCE approaches the table (hand
+    close by, ``support_ref_contact`` baked by add_support_contact.py), it rewards the current hand
+    for being at the right spot on the table SURFACE (reference witness
+    ``support_ref_witness_local`` + depth ``support_ref_contact_dist``), through the same box SDF
+    (table mesh half-extents ``support_half_extents``) and the surface geodesic.
 
-    But (demande utilisateur) : le robot SAIT ou est la table, s'en approche/s'y place correctement
-    et ne fonce pas dedans -- au lieu de la traiter comme du sol. Neutre (0) hors des frames de
-    reference-contact ou si le clip ne porte pas de table (attracteur off-contact retire, cf.
-    object_flat_contact_quality_exp). La table etant statique et plantee a sa pose de clip, sa pose
-    monde courante == pose de reference (mc.support_pos_w/quat_w).
+    Goal (user request): the robot KNOWS where the table is, approaches it / places itself on it
+    properly, and does not barge into it -- instead of treating it as ground. Neutral (0) outside
+    the reference-contact frames, or if the clip carries no table (off-contact attractor removed,
+    cf. object_flat_contact_quality_exp). Since the table is static and pinned at its clip pose, its
+    current world pose == its reference pose (mc.support_pos_w/quat_w).
     """
     from holosoma.utils.box_geometry import box_nearest_and_signed_distance, box_surface_geodesic_distance
     from holosoma.utils.grasp_settle import gather_anchor
@@ -289,7 +289,7 @@ def support_surface_contact_error_exp(
     d_ref = mc.motion.support_ref_contact_dist[ts]  # (N,)
 
     a_pos_sim, _ = gather_anchor(mc.robot_anchor_pos_w, mc.robot_anchor_quat_w, anchor_idx)
-    tab_pos, tab_quat = mc.support_pos_w, mc.support_quat_w  # statique planté
+    tab_pos, tab_quat = mc.support_pos_w, mc.support_quat_w  # static, pinned
     p_local = quat_rotate_inverse(tab_quat, a_pos_sim - tab_pos, w_last=True)
 
     half = mc.motion.support_half_extents.to(p_local.dtype)
