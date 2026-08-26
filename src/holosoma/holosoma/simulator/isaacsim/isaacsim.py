@@ -580,9 +580,18 @@ class IsaacSim(BaseSimulator):
         # call super
         super().set_headless(headless)
         if not self.headless:
-            from isaacsim.util.debug_draw import _debug_draw
+            try:
+                from isaacsim.util.debug_draw import _debug_draw
 
-            self.draw = _debug_draw.acquire_debug_draw_interface()
+                self.draw = _debug_draw.acquire_debug_draw_interface()
+            except ModuleNotFoundError as e:
+                # The isaacsim.util.debug_draw Kit extension isn't loaded by this launch
+                # profile (extscache-only, not auto-enabled). Debug drawing (draw_line/
+                # draw_sphere via isaacsim_draw_adapter) is a visualization nicety, not
+                # required for simulation -- degrade gracefully instead of crashing the run.
+                # The adapter already checks `hasattr(simulator, "draw") and simulator.draw`.
+                logger.warning(f"Debug draw unavailable ({e}); continuing without debug_draw.")
+                self.draw = None
         else:
             self.draw = None
 

@@ -408,7 +408,7 @@ class DirectSimulation:
         logger.debug("Initializing simulator...")
 
         # Need to manually set headless since it's in training config currently
-        self.simulator.set_headless(False)
+        self.simulator.set_headless(self.config.training.headless)
 
         # Step 1: Basic setup
         self.simulator.setup()
