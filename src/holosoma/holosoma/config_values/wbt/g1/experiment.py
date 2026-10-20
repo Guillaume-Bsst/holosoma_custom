@@ -335,6 +335,15 @@ g1_29dof_wbt_w_object_actor_grip_force_dyn = replace(
     observation=observation.g1_29dof_wbt_observation_w_object_actor_dyn,
 )
 
+# Experiment 4 (OTRL docs/agents/architecture.md): w_object_actor with the task made observable for the actor --
+# future reference frames (+0.1/+0.3/+0.6 s, clamped to the env's own clip), the reference box in the body frame
+# (now and future) and the anchor position error. Everything else (reward, terminations, command, robot) is
+# w_object_actor's. New input size (actor 325, critic 457): train from scratch, no warm start.
+g1_29dof_wbt_w_object_actor_future = replace(
+    g1_29dof_wbt_w_object_actor,
+    observation=observation.g1_29dof_wbt_observation_w_object_actor_future,
+)
+
 g1_27dof_wbt_w_object_actor = replace(
     g1_27dof_wbt_w_object,
     observation=observation.g1_29dof_wbt_observation_w_object_actor,

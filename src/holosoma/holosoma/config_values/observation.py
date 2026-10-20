@@ -7,6 +7,7 @@ from holosoma.config_values.wbt.g1.observation import (
     g1_29dof_wbt_observation_w_object,
     g1_29dof_wbt_observation_w_object_actor,
     g1_29dof_wbt_observation_w_object_actor_dyn,
+    g1_29dof_wbt_observation_w_object_actor_future,
 )
 
 none = None
@@ -23,4 +24,5 @@ DEFAULTS = {
     "g1_29dof_wbt_w_object_actor": g1_29dof_wbt_observation_w_object_actor,
     "g1_27dof_wbt_w_object_actor": g1_29dof_wbt_observation_w_object_actor,
     "g1_29dof_wbt_w_object_actor_dyn": g1_29dof_wbt_observation_w_object_actor_dyn,
+    "g1_29dof_wbt_w_object_actor_future": g1_29dof_wbt_observation_w_object_actor_future,
 }

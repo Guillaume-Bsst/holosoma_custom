@@ -263,9 +263,75 @@ g1_29dof_wbt_observation_w_object_actor_dyn = ObservationManagerCfg(
     },
 )
 
+# --- Experiment 4 (OTRL docs/agents/architecture.md): make the task observable for the ACTOR -----------------
+# w_object_actor's actor sees the reference at the current frame only. This preset adds, with NEW term names
+# (groups concatenate in alphabetical term order, so the existing terms keep their place relative to each other):
+#   motion_future_joint_pos  ref joints at +0.1/+0.3/+0.6 s                         87
+#   motion_future_ref_pos_b  ref anchor (torso) position at +0.1/+0.3/+0.6 s, body    9
+#   motion_future_ref_ori_b  ref anchor orientation, same offsets, body frame          18
+#   ref_obj_pos_b            REFERENCE box position at 0/+0.1/+0.3/+0.6 s, body       12
+#   ref_obj_ori_b            reference box orientation, same offsets, body frame       24
+#   motion_ref_pos_b         anchor position error vs the reference (existing term)     3
+# = +153 actor dims (172 -> 325). Every future index is clamped to the end of the env's OWN clip
+# (terms/wbt.py:future_frame_index). Fresh training only: no warm start from a 172-dim actor.
+# Noise (actor only, uniform): the reference itself is exact (0, like motion_command); the body-frame poses
+# depend on the robot's estimated pose, so they get the box's perception noise (0.02 m, 0.05).
+# The CRITIC already had motion_ref_pos_b (not duplicated); it gets the five new terms noise-free (+150 dims,
+# 307 -> 457) so that it sees at least what the actor sees.
+FUTURE_OFFSETS_S = (0.1, 0.3, 0.6)
+REF_OBJ_OFFSETS_S = (0.0, 0.1, 0.3, 0.6)
+
+
+def _future_terms(noisy: bool) -> dict[str, ObsTermCfg]:
+    pos_n, ori_n = (0.02, 0.05) if noisy else (0.0, 0.0)
+    return {
+        "motion_future_joint_pos": ObsTermCfg(
+            func=f"{_OBS}motion_future_joint_pos", params={"offsets_s": FUTURE_OFFSETS_S}, scale=1.0, noise=0.0
+        ),
+        "motion_future_ref_pos_b": ObsTermCfg(
+            func=f"{_OBS}motion_future_ref_pos_b", params={"offsets_s": FUTURE_OFFSETS_S}, scale=1.0, noise=pos_n
+        ),
+        "motion_future_ref_ori_b": ObsTermCfg(
+            func=f"{_OBS}motion_future_ref_ori_b", params={"offsets_s": FUTURE_OFFSETS_S}, scale=1.0, noise=ori_n
+        ),
+        "ref_obj_pos_b": ObsTermCfg(
+            func=f"{_OBS}ref_obj_pos_b", params={"offsets_s": REF_OBJ_OFFSETS_S}, scale=1.0, noise=pos_n
+        ),
+        "ref_obj_ori_b": ObsTermCfg(
+            func=f"{_OBS}ref_obj_ori_b", params={"offsets_s": REF_OBJ_OFFSETS_S}, scale=1.0, noise=ori_n
+        ),
+    }
+
+
+actor_obs_w_object_future = ObsGroupCfg(
+    concatenate=True,
+    enable_noise=True,
+    history_length=1,
+    terms={
+        **actor_obs_w_object.terms,
+        **_future_terms(noisy=True),
+        "motion_ref_pos_b": ObsTermCfg(func=f"{_OBS}motion_ref_pos_b", scale=1.0, noise=0.02),
+    },
+)
+
+critic_obs_w_object_future_terms = {**critic_obs_w_object_terms, **_future_terms(noisy=False)}
+
+g1_29dof_wbt_observation_w_object_actor_future = ObservationManagerCfg(
+    groups={
+        "actor_obs": actor_obs_w_object_future,
+        "critic_obs": ObsGroupCfg(
+            concatenate=True,
+            enable_noise=False,
+            history_length=1,
+            terms=critic_obs_w_object_future_terms,
+        ),
+    },
+)
+
 __all__ = [
     "g1_29dof_wbt_observation",
     "g1_29dof_wbt_observation_w_object",
     "g1_29dof_wbt_observation_w_object_actor",
     "g1_29dof_wbt_observation_w_object_actor_dyn",
+    "g1_29dof_wbt_observation_w_object_actor_future",
 ]

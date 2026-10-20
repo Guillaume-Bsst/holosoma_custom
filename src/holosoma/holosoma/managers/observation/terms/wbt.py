@@ -489,3 +489,122 @@ def obj_ang_vel_b(env: WholeBodyTrackingManager) -> torch.Tensor:
     return quat_rotate_inverse(mc.robot_ref_quat_w, mc.simulator_object_ang_vel_w, w_last=True).view(
         env.num_envs, -1
     )
+
+
+#########################################################################################################
+## Future reference frames, reference box, for the ACTOR (OTRL architecture.md, experiment 4)
+#########################################################################################################
+# The actor of w_object_actor sees the reference at the CURRENT frame only (joints, anchor orientation), not
+# where the reference goes next, nor where the reference box is, nor its own position error. These terms add
+# them. They are new functions: no existing term changes, and only the preset
+# g1_29dof_wbt_observation_w_object_actor_future uses them.
+#
+# Clip boundary: in a multi-clip run (MultiMotionLoader) all clips are concatenated in one timeline. A future
+# index t + k past the END of the env's clip would read the NEXT clip of the array (another motion, another box
+# pose). Every future index is therefore clamped to motion_end_idx[motion_ids] - 1, the last frame of the env's
+# own clip: near the end, the future is "the clip's last frame" (what the episode will hold or reset from).
+
+
+def future_offsets_steps(offsets_s, dt: float) -> list[int]:
+    """Offsets in seconds -> non-negative offsets in control steps (``time_steps`` advances one per step).
+
+    ``round``, not ``int``: 0.3 / 0.02 = 14.999999999999998 in floating point.
+    """
+    steps = [int(round(float(s) / float(dt))) for s in offsets_s]
+    if any(k < 0 for k in steps):
+        raise ValueError(f"future offsets must be >= 0, got {list(offsets_s)} s")
+    return steps
+
+
+def future_frame_index(
+    time_steps: torch.Tensor, motion_ids: torch.Tensor, motion_end_idx: torch.Tensor, offsets: torch.Tensor
+) -> torch.Tensor:
+    """(N, K) global frame index ``time_steps + offsets``, clamped to the last frame of each env's OWN clip.
+
+    Pure function (no simulator). ``time_steps`` (N,) global indices into the concatenated timeline,
+    ``motion_ids`` (N,) the clip of each env, ``motion_end_idx`` (M,) the exclusive end of each clip
+    (``MotionLoader``: one clip, end = total frames), ``offsets`` (K,) non-negative step offsets.
+    """
+    last = motion_end_idx[motion_ids] - 1  # (N,)
+    idx = time_steps[:, None] + offsets.to(time_steps.device, torch.long)[None, :]
+    return torch.minimum(idx, last[:, None])
+
+
+def _future_idx(env: WholeBodyTrackingManager, mc: MotionCommand, offsets_s) -> torch.Tensor:
+    offsets = torch.tensor(future_offsets_steps(offsets_s, env.dt), dtype=torch.long, device=mc.time_steps.device)
+    return future_frame_index(mc.time_steps, mc.motion_ids, mc.motion.motion_end_idx, offsets)
+
+
+def _in_robot_anchor_frame(mc: MotionCommand, pos_w: torch.Tensor, quat_w: torch.Tensor):
+    """(N, K, 3) positions / (N, K, 4) xyzw quats in the world -> in the robot anchor (torso) frame."""
+    k = pos_w.shape[1]
+    return subtract_frame_transforms(
+        mc.robot_ref_pos_w[:, None, :].repeat(1, k, 1),
+        mc.robot_ref_quat_w[:, None, :].repeat(1, k, 1),
+        pos_w,
+        quat_w,
+    )
+
+
+def _rot6d(quat: torch.Tensor, n: int) -> torch.Tensor:
+    mat = quaternion_to_matrix(quat, w_last=True)
+    return mat[..., :2].reshape(n, -1)
+
+
+def motion_future_joint_pos(env: WholeBodyTrackingManager, offsets_s=(0.1, 0.3, 0.6)) -> torch.Tensor:
+    """(N, 29 K): reference joint positions at t + offsets (clamped to the env's clip)."""
+    mc = _get_motion_command_and_assert_type(env)
+    idx = _future_idx(env, mc, offsets_s)
+    return mc.motion.joint_pos[idx].reshape(env.num_envs, -1)
+
+
+def motion_future_ref_pos_b(env: WholeBodyTrackingManager, offsets_s=(0.1, 0.3, 0.6)) -> torch.Tensor:
+    """(N, 3 K): reference anchor position at t + offsets, in the CURRENT robot anchor frame.
+
+    At offset 0 this is ``motion_ref_pos_b`` (the anchor position error); the future ones add where the
+    reference root is going (walk, turn) on top of that error.
+    """
+    mc = _get_motion_command_and_assert_type(env)
+    idx = _future_idx(env, mc, offsets_s)
+    pos_w = mc.motion.body_pos_w[idx, mc.ref_body_index] + env.simulator.scene.env_origins[:, None, :]
+    quat_w = mc.motion.body_quat_w[idx, mc.ref_body_index]
+    pos, _ = _in_robot_anchor_frame(mc, pos_w, quat_w)
+    return pos.reshape(env.num_envs, -1)
+
+
+def motion_future_ref_ori_b(env: WholeBodyTrackingManager, offsets_s=(0.1, 0.3, 0.6)) -> torch.Tensor:
+    """(N, 6 K): reference anchor orientation at t + offsets in the current robot anchor frame (2 matrix columns)."""
+    mc = _get_motion_command_and_assert_type(env)
+    idx = _future_idx(env, mc, offsets_s)
+    pos_w = mc.motion.body_pos_w[idx, mc.ref_body_index] + env.simulator.scene.env_origins[:, None, :]
+    quat_w = mc.motion.body_quat_w[idx, mc.ref_body_index]
+    _, ori = _in_robot_anchor_frame(mc, pos_w, quat_w)
+    return _rot6d(ori, env.num_envs)
+
+
+def ref_obj_pos_b(env: WholeBodyTrackingManager, offsets_s=(0.0, 0.1, 0.3, 0.6)) -> torch.Tensor:
+    """(N, 3 K): REFERENCE box position at t + offsets in the current robot anchor frame (zeros without a box).
+
+    ``obj_pos_b`` is the simulated box; this is where the reference puts it -- the task, and the box the
+    bad_tracking termination measures the error against.
+    """
+    mc = _get_motion_command_and_assert_type(env)
+    k = len(offsets_s)
+    if not mc.motion.has_object:
+        return torch.zeros(env.num_envs, 3 * k, device=env.device)
+    idx = _future_idx(env, mc, offsets_s)
+    pos_w = mc.motion.object_pos_w[idx] + env.simulator.scene.env_origins[:, None, :]
+    pos, _ = _in_robot_anchor_frame(mc, pos_w, mc.motion.object_quat_w[idx])
+    return pos.reshape(env.num_envs, -1)
+
+
+def ref_obj_ori_b(env: WholeBodyTrackingManager, offsets_s=(0.0, 0.1, 0.3, 0.6)) -> torch.Tensor:
+    """(N, 6 K): reference box orientation at t + offsets in the current robot anchor frame (zeros without a box)."""
+    mc = _get_motion_command_and_assert_type(env)
+    k = len(offsets_s)
+    if not mc.motion.has_object:
+        return torch.zeros(env.num_envs, 6 * k, device=env.device)
+    idx = _future_idx(env, mc, offsets_s)
+    pos_w = mc.motion.object_pos_w[idx] + env.simulator.scene.env_origins[:, None, :]
+    _, ori = _in_robot_anchor_frame(mc, pos_w, mc.motion.object_quat_w[idx])
+    return _rot6d(ori, env.num_envs)
