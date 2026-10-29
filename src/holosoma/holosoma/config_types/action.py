@@ -234,3 +234,67 @@ class TorqueReferenceNoiseCfg:
     cap for ~half the clip, and the final ``clip_torques`` then removes any positive excursion.
     Noise on an already-saturated joint is therefore not noise at all -- it is a one-sided
     downward bias, which is worse than no randomisation."""
+
+
+@dataclass(frozen=True)
+class PositionReferenceCfg:
+    """Anchor the PD position target on the reference pose instead of the default standing pose.
+
+    The PD law is ``q_target = a * action_scale + anchor``. By default ``anchor`` is
+    ``default_dof_pos`` -- a CONSTANT standing pose -- so ``a = 0`` parks the robot standing and the
+    policy has to emit the entire motion trajectory itself. The reference pose ``q_ref(t)`` is
+    already an input (``motion_command`` carries ``joint_pos``/``joint_vel``), already resampled at
+    each env's own frame, and already in robot DOF order (``MotionLoader.joint_pos`` indexes through
+    ``_joint_indexes``); it is simply never used to place the target. With ``scale = 1`` the anchor
+    becomes ``q_ref(t)``, so ``a = 0`` means "track the reference exactly" and the network only has
+    to learn the CORRECTION.
+
+    Measured on femto14_box36, the action a policy must emit to reach ``q_ref`` from the default
+    pose, i.e. ``(q_ref - q_default) / action_scale``::
+
+        median 1.87    max 8.78    8 of 29 DOF above 3.0
+        right_wrist_yaw 8.78   shoulder_pitch 5.68   hip_pitch 3.66   knee 2.93
+
+    With ``init_noise_std = 1.0`` the arm and wrist targets sit 5-9 sigma out at initialisation.
+    The observed run reached ``action_mean_abs = 0.89`` after 950 iterations while ``mpjpe`` sat
+    flat at ~0.21 rad and the hands never closed past ~0.55 m from the box centre. Re-anchoring
+    turns that traverse into a correction of ~0.2-0.5, which is inside the initial distribution.
+
+    Why this is defensible rather than cheating: the reference trajectory was solved in MuJoCo WITH
+    contacts by the stage-05 pipeline, so ``a = 0`` is a physically admissible trajectory, not a
+    pose the robot cannot hold. It is the kinematic counterpart of ``TorqueFeedforwardCfg``, which
+    already hands the policy the reference TORQUE -- this preset was giving away the dynamic prior
+    while withholding the far cheaper kinematic one.
+
+    DEPLOYMENT: like the torque feed-forward, this makes the policy structurally dependent on
+    replaying ``q_ref`` phase-indexed at inference. That is strictly simpler than the torque
+    feed-forward (the Unitree low-level command takes ``q`` natively), but it must exist. A policy
+    trained with ``scale > 0`` and run without the reference will park at the default pose plus its
+    correction, which is not the trained behaviour. The failure mode is also softer than the torque
+    one: a desynchronised replay biases the target rather than commanding a wrong torque.
+    """
+
+    enable: bool = False
+    """Master switch. Requires the command term to expose ``joint_pos``; a no-op with a warning
+    otherwise (same deferred-resolution pattern as the torque feed-forward -- the motion is not
+    loaded yet when the action manager is set up)."""
+
+    command_term_name: str = "motion_command"
+    """Name of the WBT command term to read the reference joint pose from."""
+
+    scale: float = 1.0
+    """Blend between the default pose (0) and the reference pose (1) as the PD anchor::
+
+        anchor = default_dof_pos + scale * (q_ref - default_dof_pos_base)
+
+    Subtracting the BASE default (not the per-env randomised one) keeps the domain-randomisation
+    joint bias intact at every scale -- at ``scale = 1`` the anchor is ``q_ref`` plus that same
+    +/-0.025 rad encoder-offset bias, so the robustness it buys is not silently dropped.
+
+    ``0.0`` reproduces the historical behaviour exactly. Values in between are a curriculum knob if
+    a full re-anchor turns out to make the policy over-rely on the clip."""
+
+    exclude_joint_names: tuple[str, ...] = ()
+    """DOF to keep anchored on the default pose (substring match). Empty by default: unlike the
+    torque fields, ``q_ref`` is a kinematic quantity that was never clipped by an actuator limit,
+    so the wrists carry a usable reference here even though their TORQUE does not."""

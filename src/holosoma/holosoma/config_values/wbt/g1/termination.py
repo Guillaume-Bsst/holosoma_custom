@@ -96,3 +96,38 @@ g1_29dof_wbt_termination_dyn = TerminationManagerCfg(
 )
 
 __all__ = ["g1_29dof_wbt_termination", "g1_27dof_wbt_termination", "g1_29dof_wbt_termination_dyn"]
+
+
+# =====================================================================================
+# DynaRetarget (arXiv:2602.06827): "Crucially, we do not introduce any additional
+# termination conditions related to object tracking, as we found that such terminations
+# consistently degrade performance and exacerbate the learning difficulty when combined
+# with adaptive sampling during training from scratch."
+#
+# READ THE SCOPE. That sentence is about OBJECT tracking only. `bad_tracking` is a single
+# term that bundles BOTH -- robot root/body tracking (bad_ref_*, bad_motion_body_pos) AND
+# object tracking (bad_object_*) -- so dropping the whole term would also remove the
+# robot's fall detection, which the paper never asks for and which every WBT run relies on
+# to reset a fallen episode. Instead the two object thresholds are pushed to +inf:
+# BadTracking compares `error > threshold`, and nothing is ever greater than inf, so both
+# object checks are dead while the robot ones are untouched.
+#
+# Side effect worth knowing: BadTracking is also what feeds
+# motion_command.AdaptiveTimestepsSampler ("when bad tracking is detected, the sampler will
+# be updated"). With the object checks off, the sampler now only ever hears about ROBOT
+# failures -- which is exactly the combination the paper says works, since it is the
+# object-termination/adaptive-sampling interaction they call out as harmful.
+# =====================================================================================
+g1_29dof_wbt_termination_dynaretarget = TerminationManagerCfg(
+    terms={
+        "timeout": g1_29dof_wbt_termination.terms["timeout"],
+        "bad_tracking": TerminationTermCfg(
+            func=g1_29dof_wbt_termination.terms["bad_tracking"].func,
+            params={
+                **g1_29dof_wbt_termination.terms["bad_tracking"].params,
+                "bad_object_pos_threshold": float("inf"),
+                "bad_object_ori_threshold": float("inf"),
+            },
+        ),
+    }
+)

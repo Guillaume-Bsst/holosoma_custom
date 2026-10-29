@@ -53,6 +53,13 @@ class EvalDumpArgs:
     weld: list[str] = ["auto"]  # on | off | auto (auto = whatever reset() draws)
     steps: int = 300
     out: str = "eval_dump"
+    no_grip: bool = False
+    """Desactive grip_force pour CE rollout. Le biais de couple de prise (target_force_n sur les 3
+    DDL de poignet, ~62 N mesures, actif 33 % des pas) est scripte depuis le flag de contact GT du
+    clip : c'est une prothese de la meme famille que torque_feedforward, et il faudra la rejouer
+    indexee sur la phase au deploiement. Ce flag repond a la seule question qui compte avant de
+    l'enlever : la caisse tombe-t-elle sans lui ? Non exposable en override tyro parce que
+    grip_force vit dans un `params: dict[str, Any]`, que tyro n'introspecte pas."""
 
 
 def _pop_args(argv: list[str]) -> tuple[EvalDumpArgs, list[str]]:
@@ -76,6 +83,9 @@ def _pop_args(argv: list[str]) -> tuple[EvalDumpArgs, list[str]]:
         elif tok == "--evald-out":
             args.out = argv[i + 1]
             i += 2
+        elif tok == "--evald-no-grip":
+            args.no_grip = True
+            i += 1
         else:
             remaining.append(tok)
             i += 1
@@ -95,6 +105,14 @@ def main() -> None:
         description="Overrides on top of the checkpoint's saved config.",
         config=TYRO_CONIFG,
     )
+
+    if evald.no_grip:
+        gf = cfg.action.terms["joint_control"].params.get("grip_force")
+        if isinstance(gf, dict):
+            gf["enable"] = False
+        elif gf is not None:
+            object.__setattr__(gf, "enable", False)
+        print("[evald] grip_force DESACTIVE pour ce rollout", flush=True)
 
     simulation_app = init_sim_imports(cfg)
 
@@ -145,6 +163,19 @@ def main() -> None:
     weld_trace = [[] for _ in range(num_envs)]
     frame_trace = [[] for _ in range(num_envs)]
     restarts = [0] * num_envs
+    # dof_vel du SIMULATEUR (et non une difference finie de qpos) : q.. = diff(dof_vel)/dt se compare
+    # alors terme a terme a la reference, dont le clip stocke aussi joint_vel. C'est LA mesure que
+    # les courbes d'entrainement ne peuvent pas donner -- action_rate_l2 y est noye sous le bruit
+    # d'exploration (sigma 0.50), alors qu'ici la policy tourne en act_inference, donc deterministe :
+    # c'est exactement ce qui part dans l'ONNX et ce qui tourne en sim2sim.
+    dofvel = [[] for _ in range(num_envs)]
+    # Diagnostic differentiel du capteur de contact caisse (cf. isaacsim.py et le commentaire dans
+    # managers/command/terms/wbt.py). Lu sur les buffers bruts et non sur mc.metrics, pour ne
+    # dependre d'aucune plomberie de metriques.
+    boxf = [[] for _ in range(num_envs)]
+    handf = [[] for _ in range(num_envs)]
+    allf = [[] for _ in range(num_envs)]
+    anchor_idx = mc._anchor_body_indexes
 
     with torch.no_grad():
         for _step in range(evald.steps):
@@ -174,8 +205,35 @@ def main() -> None:
             weld_np = mc.weld_assist.detach().cpu().numpy()
             frame_np = mc.time_steps.detach().cpu().numpy()
             drift_np = d.detach().cpu().numpy()
+            dofvel_np = env.simulator.dof_vel.detach().cpu().numpy()
+            # Force caisse FILTREE (capteur dedie) vs force NETTE sur les mains (capteur global).
+            # En portage les mains ne touchent rien d'autre que la caisse, donc la seconde est un
+            # temoin : nette > 0 avec filtree == 0 => le capteur filtre ne remonte rien.
+            fo = getattr(env.simulator, "contact_forces_object", None)
+            boxf_np = (
+                torch.norm(fo, dim=-1).max(dim=-1).values.detach().cpu().numpy()
+                if fo is not None
+                else np.zeros(num_envs)
+            )
+            handf_np = (
+                torch.norm(env.simulator.contact_forces[:, anchor_idx], dim=-1)
+                .max(dim=-1)
+                .values.detach()
+                .cpu()
+                .numpy()
+                if anchor_idx is not None
+                else np.zeros(num_envs)
+            )
+            # Norme de la force de contact NETTE par corps. Temoin de dernier recours : si les
+            # PIEDS lisent zero alors que le robot est debout, ce n'est pas "il n'y a pas de
+            # contact", c'est la chaine de capteurs qui ne remonte rien dans ce mode.
+            allf_np = torch.norm(env.simulator.contact_forces, dim=-1).detach().cpu().numpy()
             for e in range(num_envs):
                 qpos[e].append(row[e])
+                dofvel[e].append(dofvel_np[e])
+                boxf[e].append(float(boxf_np[e]))
+                handf[e].append(float(handf_np[e]))
+                allf[e].append(allf_np[e])
                 drift[e].append(float(drift_np[e]))
                 dones_trace[e].append(bool(done_np[e]))
                 weld_trace[e].append(bool(weld_np[e]))
@@ -193,7 +251,20 @@ def main() -> None:
     for e in range(num_envs):
         tag = weld_modes[e]
         pth = f"{evald.out}_env{e}_f{frames[e]}_weld-{tag}.npz"
-        np.savez(pth, qpos=np.asarray(qpos[e], np.float64), fps=np.int64(fps_out))
+        # qpos/fps restent les deux seules cles que lit viser_player ; les suivantes sont du
+        # diagnostic pur et sont ignorees par les consommateurs existants (np.savez -> lazy load).
+        np.savez(
+            pth,
+            qpos=np.asarray(qpos[e], np.float64),
+            fps=np.int64(fps_out),
+            dof_vel=np.asarray(dofvel[e], np.float32),
+            box_force_max=np.asarray(boxf[e], np.float32),
+            hand_net_force_max=np.asarray(handf[e], np.float32),
+            net_force_bodies=np.asarray(allf[e], np.float32),
+            body_names=np.asarray(env.simulator.body_names),
+            frame=np.asarray(frame_trace[e], np.int64),
+            done=np.asarray(dones_trace[e], bool),
+        )
         meta["envs"].append(
             {
                 "env": e,

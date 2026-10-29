@@ -1244,3 +1244,101 @@ def apply_pushes(
     state.resample(push_robot_env_ids)
     env._max_push_vel = state.max_push_vel.clone()
     env._push_robots(push_robot_env_ids)
+
+
+# =====================================================================================
+# DynaRetarget (arXiv:2602.06827): "we apply random external pushes to the object at
+# random intervals during the episode".
+#
+# Deliberately a SEPARATE schedule from PushRandomizerState: that one drives
+# `env._push_robots`, i.e. it kicks the ROBOT base, and the two disturbances have nothing
+# to do with each other -- sharing a counter would couple "the box got bumped" to "the
+# robot got shoved" on the same tick, which is not what the paper describes.
+#
+# Implemented as an instantaneous velocity delta on the object's root state, matching the
+# convention `_push_robots` already uses for the robot, rather than the persistent wrench
+# of set_object_external_wrench (which has to be re-zeroed every step and would model a
+# sustained load, not a push).
+# =====================================================================================
+class ObjectPushRandomizerState(RandomizationTermBase):
+    """Owns the object-push interval schedule and counters (one per env)."""
+
+    def __init__(self, cfg: Any, env: Any):
+        super().__init__(cfg, env)
+        params = cfg.params or {}
+        interval = params.get("push_interval_s", [2.0, 5.0])
+        self.push_interval_range: Sequence[float] = [float(interval[0]), float(interval[1])]
+        self.max_push_lin_vel: float = float(params.get("max_push_lin_vel", 0.0))
+        self.max_push_ang_vel: float = float(params.get("max_push_ang_vel", 0.0))
+        self.enabled: bool = bool(params.get("enabled", True))
+        self.push_interval_s: torch.Tensor | None = None
+        self.push_counter: torch.Tensor | None = None
+        logger.info(
+            f"[Randomization] ObjectPushRandomizerState (enabled={self.enabled}, "
+            f"interval_s={self.push_interval_range}, lin={self.max_push_lin_vel}, "
+            f"ang={self.max_push_ang_vel})"
+        )
+
+    def setup(self) -> None:
+        n, dev = self.env.num_envs, self.env.device
+        self.push_interval_s = torch.zeros(n, dtype=torch.float32, device=dev)
+        self.push_counter = torch.zeros(n, dtype=torch.int, device=dev)
+        self._resample(torch.arange(n, device=dev))
+
+    def reset(self, env_ids: torch.Tensor | None = None) -> None:
+        if self.push_counter is None:
+            return
+        idx = _ensure_env_ids_tensor(self.env, env_ids)
+        if idx.numel():
+            self.push_counter[idx] = 0
+            self._resample(idx)
+
+    def _resample(self, env_ids: torch.Tensor) -> None:
+        if self.push_interval_s is None or env_ids.numel() == 0:
+            return
+        low, high = self.push_interval_range
+        low_i = max(1, int(low))
+        high_i = max(low_i + 1, int(high))
+        self.push_interval_s[env_ids] = torch_rand_float(
+            low_i, high_i, (env_ids.shape[0], 1), device=self.env.device
+        ).squeeze(1)
+
+    def due_envs(self, dt: float) -> torch.Tensor:
+        if not self.enabled or self.push_interval_s is None or self.push_counter is None:
+            return torch.empty(0, device=self.env.device, dtype=torch.long)
+        self.push_counter += 1
+        steps = (self.push_interval_s / dt).to(torch.int)
+        return (self.push_counter >= steps).nonzero(as_tuple=False).flatten()
+
+    def step(self) -> None:
+        """No-op: per-step counting happens in due_envs(), called from the separately
+        registered apply_object_pushes step_term (needs dt, which this hook doesn't get)."""
+
+
+def apply_object_pushes(env, **_) -> None:
+    """Kick the object with a random velocity delta on its own schedule."""
+    state = env.randomization_manager.get_state("object_push_randomizer_state")
+    if state is None:
+        raise AttributeError("ObjectPushRandomizerState is not registered with the randomization manager.")
+    if env.is_evaluating or not state.enabled:
+        return
+
+    motion_command = env.command_manager.get_state("motion_command")
+    if motion_command is None or not getattr(motion_command.motion, "has_object", False):
+        return
+
+    env_ids = state.due_envs(env.dt)
+    if env_ids.numel() == 0:
+        return
+    state.push_counter[env_ids] = 0
+    state._resample(env_ids)
+
+    # Read-modify-write the object root state: only the velocity block is touched, so the
+    # pose the physics solver is currently holding is preserved exactly.
+    idx = motion_command.object_indices_in_simulator
+    cur = env.simulator.all_root_states[idx][env_ids, :13].clone()
+    if state.max_push_lin_vel > 0.0:
+        cur[:, 7:10] += (torch.rand_like(cur[:, 7:10]) - 0.5) * 2.0 * state.max_push_lin_vel
+    if state.max_push_ang_vel > 0.0:
+        cur[:, 10:13] += (torch.rand_like(cur[:, 10:13]) - 0.5) * 2.0 * state.max_push_ang_vel
+    env.simulator.set_actor_states([motion_command.object_name], env_ids, cur)

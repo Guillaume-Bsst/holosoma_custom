@@ -192,6 +192,20 @@ class SimEngineConfig:
     whole_body_tracking/femto14_support_world.obj). Its AABB gives the table's size and clip
     position; collision is an exact box geom (see add_support)."""
 
+    add_stairs: bool = False
+    """run_sim only: spawn a HoloV2-generated staircase as per-level STATIC boxes (see
+    resolve_stairs_spawn / SceneManager.add_static_boxes). Unlike add_support (a single mesh,
+    fine for a near-convex table), a staircase is genuinely non-convex -- a single mesh's
+    convex-hull collision would fill the steps into a ramp, so it is decomposed into one convex
+    box per height level instead. Requires stairs_params_file and object_motion_file (for
+    re-anchoring to this scene's robot init pose, same as add_support)."""
+
+    stairs_params_file: str | None = None
+    """Path to the `stair_params.npz` the retargeting stage saved alongside the staircase mesh
+    (riser/going/n_steps/s0/z_min/center_xy/forward/lateral/stances/isaac_z_shift). Source of
+    truth for both the per-level box geometry and the Isaac-side z-shift, so this sim and the
+    training clip always agree on where the landing sits."""
+
     record_csv_path: str | None = None
     """run_sim only: if set, log robot root pose (robot_root_states, world frame, xyzw) and box
     pose (get_free_box_and_ref_pose, world frame, wxyz) to this CSV path every physics step."""

@@ -7,7 +7,12 @@ from typing import TYPE_CHECKING, Any
 import torch
 from loguru import logger
 
-from holosoma.config_types.action import GripForceCfg, TorqueFeedforwardCfg, TorqueReferenceNoiseCfg
+from holosoma.config_types.action import (
+    GripForceCfg,
+    PositionReferenceCfg,
+    TorqueFeedforwardCfg,
+    TorqueReferenceNoiseCfg,
+)
 from holosoma.managers.action.base import ActionTermBase
 from holosoma.utils.rotations import quat_apply
 
@@ -120,6 +125,29 @@ class JointPositionActionTerm(ActionTermBase):
                 dropped = [d for d, k in zip(env.dof_names, keep) if not k]
                 logger.info(f"torque_feedforward: active on {int(mask.sum())} DOF, excluding {dropped}")
 
+        # Reference-pose PD anchor (see PositionReferenceCfg). Same tyro-dict workaround and the
+        # same deferred motion resolution as the torque feed-forward.
+        pr_cfg = self.cfg.params.get("position_reference")
+        if isinstance(pr_cfg, dict):
+            pr_cfg = PositionReferenceCfg(**pr_cfg)
+        self._pr_cfg: PositionReferenceCfg | None = pr_cfg
+        self._pr_enabled = bool(self._pr_cfg is not None and self._pr_cfg.enable)
+        self._pr_command_term = None  # resolved in setup(), once all managers exist
+        self._pr_validated = False  # clip exposes joint_pos: checked once, at first use
+        self._pr_dof_mask: torch.Tensor | None = None
+        if self._pr_enabled:
+            assert self._pr_cfg is not None
+            exclude = self._pr_cfg.exclude_joint_names
+            if exclude:
+                keep = [not any(sel in dof for sel in exclude) for dof in env.dof_names]
+                mask = torch.tensor(keep, dtype=torch.float32, device=env.device)
+                assert mask.any(), (
+                    f"position_reference exclude_joint_names={exclude} left no DOF out of {env.dof_names}"
+                )
+                self._pr_dof_mask = mask
+                dropped = [d for d, k in zip(env.dof_names, keep) if not k]
+                logger.info(f"position_reference: active on {int(mask.sum())} DOF, excluding {dropped}")
+
         # Stage-05 reference-scaled torque noise (see TorqueReferenceNoiseCfg). Same tyro-dict
         # workaround and same lazy motion resolution as the feed-forward above.
         tn_cfg = self.cfg.params.get("torque_reference_noise")
@@ -228,6 +256,20 @@ class JointPositionActionTerm(ActionTermBase):
                 # yet at action-manager setup time.
                 self._tn_command_term = term
 
+        if self._pr_enabled:
+            assert self._pr_cfg is not None
+            term = self.env.command_manager.get_state(self._pr_cfg.command_term_name)
+            if term is None:
+                logger.warning(
+                    f"position_reference is enabled but command term "
+                    f"'{self._pr_cfg.command_term_name}' does not exist -- disabling it."
+                )
+                self._pr_enabled = False
+            else:
+                # Same deferred inspection as above: MotionCommand builds its loader in its own
+                # setup(), which runs AFTER the action manager's (base_task.py:168-170).
+                self._pr_command_term = term
+
     @property
     def action_dim(self) -> int:
         """Dimension of the action term."""
@@ -312,9 +354,12 @@ class JointPositionActionTerm(ActionTermBase):
         control_type = self.env.robot_config.control.control_type
 
         if control_type == "P":
-            # Position control
+            # Position control. The PD anchor is the default standing pose unless
+            # PositionReferenceCfg re-anchors it on the clip's reference pose, in which case an
+            # action of 0 means "track the reference" instead of "stand still".
+            anchor = self._position_anchor()
             torques = (
-                self._kp_scale * self.p_gains * (actions_scaled + self.env.default_dof_pos - self.env.simulator.dof_pos)
+                self._kp_scale * self.p_gains * (actions_scaled + anchor - self.env.simulator.dof_pos)
                 - self._kd_scale * self.d_gains * self.env.simulator.dof_vel
             )
         elif control_type == "V":
@@ -359,6 +404,63 @@ class JointPositionActionTerm(ActionTermBase):
             torques = torch.clip(torques, -self.env.torque_limits, self.env.torque_limits)
 
         return torques
+
+    def _position_anchor(self) -> torch.Tensor:
+        """PD position anchor: the default pose, or a blend toward the clip's reference pose.
+
+        ``anchor = default_dof_pos + scale * (q_ref - default_dof_pos_base)``
+
+        The per-env randomised ``default_dof_pos`` carries the domain-randomisation joint bias while
+        ``default_dof_pos_base`` does not, so subtracting the BASE preserves that bias at every
+        scale instead of cancelling it at scale=1 (see PositionReferenceCfg.scale).
+        """
+        if not (self._pr_enabled and self._pr_motion_ready()):
+            return self.env.default_dof_pos
+
+        cfg = self._pr_cfg
+        assert cfg is not None and self._pr_command_term is not None
+        delta = self._pr_command_term.joint_pos - self.env.default_dof_pos_base  # (E, num_dof)
+        if self._pr_dof_mask is not None:
+            delta = delta * self._pr_dof_mask
+        anchor = self.env.default_dof_pos + cfg.scale * delta
+        self.env.log_dict["position_ref/anchor_delta_abs_mean"] = delta.abs().mean()
+        return anchor
+
+    def _pr_motion_ready(self) -> bool:
+        """One-shot check that the command term can serve a reference joint pose.
+
+        Deferred out of ``setup()`` for the same reason as the torque feed-forward: the motion is
+        not loaded when the action manager is set up, so ``term.joint_pos`` does not exist yet.
+        """
+        if self._pr_validated:
+            return self._pr_enabled
+        self._pr_validated = True
+        term = self._pr_command_term
+        if term is None or getattr(term, "motion", None) is None:
+            logger.warning(
+                "position_reference is enabled but the command term carries no motion -- disabling it."
+            )
+            self._pr_enabled = False
+            return False
+        try:
+            q_ref = term.joint_pos
+        except Exception as exc:  # noqa: BLE001 - any loader failure means no usable reference
+            logger.warning(f"position_reference: command term has no usable joint_pos ({exc}) -- disabling it.")
+            self._pr_enabled = False
+            return False
+        if q_ref.shape[-1] != self._action_dim:
+            # Would silently misalign the anchor per joint -- refuse rather than train on it.
+            logger.warning(
+                f"position_reference: reference joint_pos has {q_ref.shape[-1]} DOF but the robot has "
+                f"{self._action_dim} -- disabling it."
+            )
+            self._pr_enabled = False
+            return False
+        logger.info(
+            f"position_reference: PD anchor re-based on the clip reference pose "
+            f"(scale={self._pr_cfg.scale if self._pr_cfg else 0.0})"
+        )
+        return self._pr_enabled
 
     def _tn_motion_ready(self) -> bool:
         """One-shot check that the loaded clip carries ``dyn_tau``. See ``_ff_motion_ready``."""

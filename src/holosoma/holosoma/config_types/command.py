@@ -63,6 +63,30 @@ class NoiseToInitialPoseConfig:
     object_pos: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
     """noise scale for object position x, y, z."""
 
+    # --- DynaRetarget (arXiv:2602.06827) phase-conditional object reset -----------------
+    # "when the episode is reset during the initial frames, we randomize the object pose
+    #  (p_obj, theta_obj) around the desired object pose. When the reset occurs after the
+    #  initial frames, we instead randomize the object velocities (v_obj, omega_obj)
+    #  around their desired values."
+    #
+    # The two are EXCLUSIVE by design: perturbing the pose of an object that is already
+    # being carried breaks the grasp, while perturbing the velocity of an object still at
+    # rest on the floor does nothing. All four scales default to 0.0, so a preset that does
+    # not set them keeps the previous behaviour exactly.
+    object_rot: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    """noise scale for object orientation roll, pitch, yaw (early-frame resets only)."""
+
+    object_lin_vel: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    """noise scale for object linear velocity vx, vy, vz (late-frame resets only)."""
+
+    object_ang_vel: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    """noise scale for object angular velocity wx, wy, wz (late-frame resets only)."""
+
+    object_initial_frames: int = 0
+    """Frame index splitting the two regimes above. The paper says "initial frames" without
+    giving a number; 0 disables the split entirely (every reset is treated as late), which is
+    what keeps this a no-op for presets that do not opt in."""
+
 
 @dataclass(frozen=True)
 class GraspSettleConfig:

@@ -424,6 +424,30 @@ class MujocoSceneManager:
         geom.conaffinity = 1
         logger.info(f"Added static mesh '{name}' ({len(vertices)} verts) at {list(pos)}")
 
+    def add_static_boxes(self, name: str, boxes) -> None:
+        """Add STATIC (no-joint) box geoms -- a concave shape (e.g. a staircase) decomposed into
+        one convex box per height level, so each geom's collision is EXACT: unlike
+        `add_static_mesh`, there is no single-mesh convex hull to distort a non-convex silhouette
+        into a phantom ramp (see that method's docstring). Boxes may overlap (e.g. each stair
+        level spanning from its own leading edge to a shared far end) -- overlap between two
+        already-convex primitives does not create any hull artifact, it just unions their solids.
+        `boxes` is a sequence of (pos[3], half_extents[3], quat_wxyz[4]).
+        """
+        for i, (pos, half_extents, quat) in enumerate(boxes):
+            body = self.world_spec.worldbody.add_body(name=f"{name}_{i}", pos=list(pos), quat=list(quat))
+            geom = body.add_geom(
+                name=f"{name}_{i}_geom",
+                type=mujoco.mjtGeom.mjGEOM_BOX,
+                size=list(half_extents),
+                rgba=[0.6, 0.6, 0.62, 1.0],
+                friction=[1.0, 0.01, 0.001],
+                solimp=[0.99, 0.99, 0.01, 0.5, 2],
+                solref=[0.001, 1],
+            )
+            geom.contype = 2
+            geom.conaffinity = 1
+        logger.info(f"Added {len(boxes)} static box(es) as '{name}_0'..'{name}_{len(boxes) - 1}'")
+
     def _apply_collision_settings(self, robot_spec: mujoco.MjSpec, robot_config: RobotConfig) -> None:
         """Apply collision settings based on unified self_collisions configuration.
 

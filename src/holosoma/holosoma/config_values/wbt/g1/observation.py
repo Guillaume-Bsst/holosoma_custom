@@ -2,6 +2,8 @@
 
 from holosoma.config_types.observation import ObservationManagerCfg, ObsGroupCfg, ObsTermCfg
 
+_OBS = "holosoma.managers.observation.terms.wbt:"
+
 # NOTE: history_length=1 sur l'ACTEUR (et sur le critic). Impose par le WARM START : on repart du
 # checkpoint full-loco 3ivghz1e (wandb guibsst-inria/WholeBodyTracking/3ivghz1e), dont l'acteur a
 # 154 dims d'entree et le critic 286 -- des tenseurs empiles sur 3 frames ne s'y chargeraient pas
@@ -217,8 +219,6 @@ g1_29dof_wbt_observation_w_object_actor = ObservationManagerCfg(
     },
 )
 
-_OBS = "holosoma.managers.observation.terms.wbt:"
-
 # Observations PRIVILEGIEES du critique (etage 05). Le critique n'est jamais deploye : il n'existe
 # que pour estimer la valeur pendant l'entrainement, donc tout ce qui reduit la variance de cette
 # estimation est gratuit vis-a-vis du robot reel. C'est la meme asymetrie qui lui donne deja
@@ -263,9 +263,53 @@ g1_29dof_wbt_observation_w_object_actor_dyn = ObservationManagerCfg(
     },
 )
 
+# ------------------------------------------------------------------------------------------------
+# Variante REF-OBJ : la CIBLE de la caisse entre dans l'observation (+9 dims des deux cotes).
+#
+# Diagnostic qui la motive (run tn5t8rjj, 950 iterations, clip torquecap). Le corps va bien --
+# error_body_pos 0.080 m et en baisse, ref_pos JAMAIS cause de mort -- mais la caisse ne se prend
+# pas : object_hand_dist plafonne a 0.55 m du centre (la surface est a 0.18), les six capteurs de
+# contact caisse lisent 0.0000 a toutes les iterations, et 49 % des morts sont object_pos. Les trois
+# rewards de contact montent (x7 en 600 iterations) mais depuis ~0, et achieved_frac reste PLAT a
+# 0.40 pendant que la longueur d'episode fait x3.5 : la policy survit mieux sans mieux faire.
+#
+# Ce que ce preset change : 3.5 des 11.0 poids positifs notent l'ecart entre la caisse et sa cible,
+# et la cible n'etait un input NI de l'acteur NI du critique. Contrairement aux cibles de corps (la
+# cinematique directe de q_ref, que l'acteur a deja), la trajectoire de la caisse n'est pas
+# derivable de l'observation : elle n'est recuperable que par memorisation d'un lookup de 527
+# frames indexe par la pose articulaire de reference.
+#
+# Sans bruit, des deux cotes : ce n'est pas une mesure de capteur mais une consigne rejouee depuis
+# le clip, exactement comme motion_command. Le bruit de perception reste sur obj_pos_b, qui est la
+# caisse REELLE.
+_ACTOR_REF_OBJ_TERMS = {
+    "obj_ref_pos_b": ObsTermCfg(func=f"{_OBS}obj_ref_pos_b", scale=1.0, noise=0.0),
+    "obj_ref_ori_b": ObsTermCfg(func=f"{_OBS}obj_ref_ori_b", scale=1.0, noise=0.0),
+}
+
+actor_obs_w_object_ref = ObsGroupCfg(
+    concatenate=True,
+    enable_noise=True,
+    history_length=1,
+    terms={**actor_obs_w_object.terms, **_ACTOR_REF_OBJ_TERMS},
+)
+
+g1_29dof_wbt_observation_w_object_actor_dyn_refobj = ObservationManagerCfg(
+    groups={
+        "actor_obs": actor_obs_w_object_ref,  # 172 -> 181
+        "critic_obs": ObsGroupCfg(
+            concatenate=True,
+            enable_noise=False,
+            history_length=1,
+            terms={**critic_obs_w_object_dyn_terms, **_ACTOR_REF_OBJ_TERMS},  # 322 -> 331
+        ),
+    },
+)
+
 __all__ = [
     "g1_29dof_wbt_observation",
     "g1_29dof_wbt_observation_w_object",
     "g1_29dof_wbt_observation_w_object_actor",
     "g1_29dof_wbt_observation_w_object_actor_dyn",
+    "g1_29dof_wbt_observation_w_object_actor_dyn_refobj",
 ]

@@ -231,16 +231,52 @@ def motion_relative_body_orientation_error_exp(env: WholeBodyTrackingManager, si
     return torch.exp(-error.mean(-1) / sigma**2)
 
 
-def motion_global_body_lin_vel(env: WholeBodyTrackingManager, sigma: float) -> torch.Tensor:
+def motion_global_body_lin_vel(
+    env: WholeBodyTrackingManager,
+    sigma: float | None = None,
+    sigmas: tuple[float, ...] | None = None,
+    sigma_weights: tuple[float, ...] | None = None,
+) -> torch.Tensor:
     motion_command = _get_motion_command_and_assert_type(env)
     error = torch.sum(torch.square(motion_command.body_lin_vel_w - motion_command.robot_body_lin_vel_w), dim=-1)
-    return torch.exp(-error.mean(-1) / sigma**2)
+    return _multiscale_exp(error.mean(-1), sigma, sigmas, sigma_weights)
 
 
-def motion_global_body_ang_vel(env: WholeBodyTrackingManager, sigma: float) -> torch.Tensor:
+def motion_global_body_ang_vel(
+    env: WholeBodyTrackingManager,
+    sigma: float | None = None,
+    sigmas: tuple[float, ...] | None = None,
+    sigma_weights: tuple[float, ...] | None = None,
+) -> torch.Tensor:
+    """Vitesse angulaire des corps suivis, noyau gaussien (mono ou multi-echelle).
+
+    ``sigmas`` est disponible mais AUCUN preset ne s'en sert aujourd'hui, et c'est un choix mesure.
+
+    Constat du run fjj74m7c (20 500 iterations) : error_body_ang_vel = 3.27 rad/s, soit 2.6x
+    l'amplitude propre de la reference (1.26 rad/s median sur femto14_box36), apres n'avoir baisse
+    que de 3.65 -- -10 % sur 1.9 G samples, pendant que le tracking de POSITION passait de 0.86 a
+    0.94. Bonnes poses, mauvaises vitesses : un mouvement saccade.
+
+    Le reflexe est d'accuser sigma=3.14 (c'est pi, pas une mesure) et de le resserrer, eventuellement
+    en multi-echelle comme sur object_flat_contact_quality_exp. La mesure dit le contraire :
+
+        erreur (rad/s)                    3.42     2.00     1.00
+        sigma=3.14 seul                  0.305    0.667    0.904
+        sigmas=(3.14, 1.5)               0.155    0.418    0.772
+
+    A l'erreur ACTUELLE le noyau large n'est pas plat, il est en pleine pente -- 3.42 -> 2.00
+    rapporte +0.362. Le multi-echelle ramene ce meme gain a +0.263, parce que le noyau fin vaut
+    0.005 a 3.42 rad/s et ne contribue rien avant ~2 rad/s : moyenner un noyau vivant avec un noyau
+    mort DIVISE la pente. Le multi-echelle repare un noyau plat ; il n'y a rien a reparer ici.
+
+    Le gradient existe donc deja, il ne paie simplement pas assez face aux termes de position --
+    c'est un probleme de POIDS, traite dans reward.py (preset _dyn_stab). ``sigmas`` reste expose
+    pour le jour ou l'erreur passera sous ~1.5 rad/s : le noyau large deviendra alors plat a son
+    tour et une echelle fine redeviendra le bon outil.
+    """
     motion_command = _get_motion_command_and_assert_type(env)
     error = torch.sum(torch.square(motion_command.body_ang_vel_w - motion_command.robot_body_ang_vel_w), dim=-1)
-    return torch.exp(-error.mean(-1) / sigma**2)
+    return _multiscale_exp(error.mean(-1), sigma, sigmas, sigma_weights)
 
 
 # ================================================================================================
@@ -266,7 +302,86 @@ def object_global_ref_orientation_error_exp(env: WholeBodyTrackingManager, sigma
     return torch.exp(-error / sigma**2)
 
 
-def object_grasp_relative_error_exp(env: WholeBodyTrackingManager, sigma: float) -> torch.Tensor:
+def object_contact_force_match_exp(
+    env: WholeBodyTrackingManager,
+    sigma_pos: float,
+    sigma_force: float,
+    force_threshold: float,
+    max_force_bonus: float = 2.0,
+) -> torch.Tensor:
+    """HDMI's interaction reward: is the hand REALLY pressing on the box where the reference says?
+
+    Port of the contact reward of HDMI (arXiv:2509.16757, Table I weight 5.0), gated by the binary
+    reference contact indicator ``c_t``. See ``utils.object_interaction.hdmi_contact_reward`` for the
+    formula and for the two deviations (capped force factor, 0 rather than 1 off-gate).
+
+    Ported from holosoma_custom's feat/object-interaction-rewards branch (commit 309c2a3^), with the
+    ``has_contact_schedule``/ramped-gate branch dropped -- that feature (--contact-schedule-file)
+    isn't present on this branch, so the gate is always the plain binary ``ref_contact``, matching
+    HDMI's own c_t.
+
+    What it adds over the purely kinematic contact/pose terms: it reads the MEASURED contact force,
+    so it can tell a grip that bears load from a pose that merely looks like one. Distance-only terms
+    are satisfied by a hand resting a millimetre off the box; this one is not, until it actually pushes.
+
+    Neutral (1) without resolved anchors (e.g. no grasp_settle.enable / no object on the clip).
+    """
+    from holosoma.utils.box_geometry import box_nearest_and_signed_distance
+    from holosoma.utils.grasp_settle import gather_anchor
+    from holosoma.utils.object_interaction import hdmi_contact_reward
+    from holosoma.utils.rotations import quat_apply, quat_rotate_inverse
+
+    mc = _get_motion_command_and_assert_type(env)
+    if mc._anchor_body_indexes is None:
+        return torch.ones(env.num_envs, device=env.device)
+
+    anchor_idx, ref_contact = mc._lookup_ref_contact(mc.time_steps, mc.anchor_pos_w, mc.object_pos_w)
+    a_pos, _ = gather_anchor(mc.robot_anchor_pos_w, mc.robot_anchor_quat_w, anchor_idx)
+
+    # p_target, box-local, carried on the CURRENT sim box pose -- the same convention as
+    # object_surface_contact_error_exp. Tracking the box's own pose is the job of
+    # object_global_ref_*; this term grades the hand against the box that is actually there.
+    box_pos, box_quat = mc.simulator_object_pos_w, mc.simulator_object_quat_w
+    if mc.motion.has_gt_witness:
+        witness_local = mc.motion.object_ref_witness_local[mc.time_steps]  # (N, 3)
+    else:
+        # No reference witness on this clip: fall back to the nearest point of the box surface, so
+        # the distance becomes the hand-to-surface gap. Less faithful to HDMI, whose p_target is the
+        # demo's own contact point, but the FORCE factor -- what this term adds over the purely
+        # kinematic contact terms -- needs no witness at all, and requiring one would make the whole
+        # term inert on every clip that does not carry one.
+        p_local = quat_rotate_inverse(box_quat, a_pos - box_pos, w_last=True)
+        half_extents = torch.tensor(mc.grasp_settle_cfg.box_half_extents, device=env.device, dtype=p_local.dtype)
+        _, witness_local = box_nearest_and_signed_distance(p_local, half_extents)
+    p_target = box_pos + quat_apply(box_quat, witness_local, w_last=True)
+    distance = torch.norm(a_pos - p_target, dim=-1)
+
+    # ||F|| on the contact hand, maxed over the sensor history like UndesiredContacts does: contact
+    # forces are intermittent across substeps, so an instantaneous read makes the bonus flicker on a
+    # grip that is in fact steady.
+    forces = env.simulator.contact_forces_history[:, :, mc._anchor_body_indexes]  # (N, H, A, 3)
+    force_per_anchor = torch.max(torch.norm(forces, dim=-1), dim=1)[0]  # (N, A)
+    env_ids = torch.arange(env.num_envs, device=env.device)
+    force = force_per_anchor[env_ids, anchor_idx.clamp(0, force_per_anchor.shape[1] - 1)]  # (N,)
+
+    gate = ref_contact
+    return hdmi_contact_reward(
+        distance,
+        force,
+        gate,
+        sigma_pos=sigma_pos,
+        sigma_force=sigma_force,
+        force_threshold=force_threshold,
+        max_force_bonus=max_force_bonus,
+    )
+
+
+def object_grasp_relative_error_exp(
+    env: WholeBodyTrackingManager,
+    sigma: float | None = None,
+    sigmas: tuple[float, ...] | None = None,
+    sigma_weights: tuple[float, ...] | None = None,
+) -> torch.Tensor:
     """Dense grasp signal: track the hand<->object RELATIVE position during contact frames.
 
     The global object rewards above only constrain the object's world pose; while carrying, what
@@ -276,6 +391,23 @@ def object_grasp_relative_error_exp(env: WholeBodyTrackingManager, sigma: float)
     point-cloud interaction fields, else the runtime nearest-anchor distance threshold (see
     MotionCommand.ref_hand_contact_lr) -- this returns ``exp(-||rel_sim - rel_ref||^2 / sigma^2)``,
     averaged over the hands actually in contact; 0 on free frames.
+
+    APPROACH SCALE (``sigmas``). With a single sigma of 0.1 this term is numerically dead beyond
+    ~0.25 m: exp(-0.35^2/0.1^2) = 3e-6, and 0.55 m underflows to 0. Measured on the first
+    full-physics run, the hands sat around 0.55 m from the box centre and the six box contact
+    sensors read identically 0.0000 for 950 iterations -- the policy lived entirely inside the
+    region where EVERY contact reward is flat, so nothing ever asked it, gradient-wise, to close the
+    gap. Seeing the box (``obj_pos_b`` is in the actor observation) is not enough: the reward has to
+    change as the hand approaches, and it did not. The only signal pulling a wrist toward its target
+    was ``motion_relative_body_position_error_exp``, which averages over 14 bodies and so pays about
+    0.09 for halving a wrist error worth ~0.67 once at contact.
+
+    This is the same failure the coarse companion of ``object_flat_contact_quality_exp`` was added
+    to fix ("at 8 cm sigma=0.03 is 0.0008, numerically nil, so there is no gradient to DISCOVER the
+    patch") -- except that fix was scaled for a hand already 8 cm away. A sigma near 0.3 keeps a
+    usable slope from 0.55 m all the way in (0.035 / 0.26 / 0.50 at 0.55 / 0.35 / 0.25 m) while the
+    fine kernel still decides the last centimetres. Still bounded 0..1 and still exactly 0 off
+    reference-contact frames, so the "die before contact" attractor is not reintroduced.
     """
     from holosoma.utils.grasp_settle import gather_anchor, grasp_relative_transform
 
@@ -288,7 +420,7 @@ def object_grasp_relative_error_exp(env: WholeBodyTrackingManager, sigma: float)
         rel_sim, _ = grasp_relative_transform(
             a_pos_sim, a_quat_sim, mc.simulator_object_pos_w, mc.simulator_object_quat_w
         )
-        return torch.exp(-torch.sum(torch.square(rel_sim - rel_ref), dim=-1) / sigma**2)
+        return _multiscale_exp(torch.sum(torch.square(rel_sim - rel_ref), dim=-1), sigma, sigmas, sigma_weights)
 
     # Bimanual when the clip carries measured per-hand contact: the box is genuinely held by BOTH
     # hands on most carry frames, and a single-anchor term grades only the nearest one -- leaving
@@ -318,7 +450,11 @@ def object_grasp_relative_error_exp(env: WholeBodyTrackingManager, sigma: float)
 
 
 def object_surface_contact_error_exp(
-    env: WholeBodyTrackingManager, sigma_geodesic: float, sigma_dist: float
+    env: WholeBodyTrackingManager,
+    sigma_geodesic: float | None = None,
+    sigma_dist: float = 0.08,
+    sigmas_geodesic: tuple[float, ...] | None = None,
+    sigma_geodesic_weights: tuple[float, ...] | None = None,
 ) -> torch.Tensor:
     """WHERE on the object surface + how deep the current contact is, vs the retargeting reference.
 
@@ -352,7 +488,11 @@ def object_surface_contact_error_exp(
     d_current, w_current = box_nearest_and_signed_distance(p_local, half_extents)
 
     geo = box_surface_geodesic_distance(w_ref, w_current, half_extents)
-    reward_geo = torch.exp(-torch.square(geo) / sigma_geodesic**2)
+    # Multi-scale on the GEODESIC component only (see object_grasp_relative_error_exp for the
+    # measurement that motivates it): that is the one that says "the hand is far from where it
+    # should touch", and a single 0.1 kernel is flat past ~0.25 m. The DEPTH component keeps one
+    # sigma -- it is a signed gap around 0, not a distance to be traversed, so it has no dead zone.
+    reward_geo = _multiscale_exp(torch.square(geo), sigma_geodesic, sigmas_geodesic, sigma_geodesic_weights)
     reward_dist = torch.exp(-torch.square(d_ref - d_current) / sigma_dist**2)
 
     reward = reward_geo * reward_dist
@@ -808,3 +948,114 @@ class UndesiredContacts(RewardTermBase):
             assert name in b_names, f"The specified name ({name}) doesn't exist: {b_names}"
             indexes.append(b_names.index(name))
         return torch.tensor(indexes, dtype=torch.long, device=device)
+
+
+# =====================================================================================
+# DynaRetarget (arXiv:2602.06827) Table IV -- terms the WBT reward set did not have.
+#
+# Convention note, and it matters: the paper writes every tracking term as
+# exp(-k * ||.||^2) while every kernel in this file is exp(-||.||^2 / sigma^2). The two
+# agree with sigma = 1/sqrt(k), so the presets convert rather than pasting the paper's
+# k as a sigma -- doing that would square-invert every width.
+# =====================================================================================
+
+
+def motion_joint_position_error_exp(
+    env: WholeBodyTrackingManager,
+    sigma: float | None = None,
+    sigmas: tuple[float, ...] | None = None,
+    sigma_weights: tuple[float, ...] | None = None,
+) -> torch.Tensor:
+    """Joint-space tracking against the reference pose (Table IV "Joint Pos Tracking", k=5, w=2.0).
+
+    The existing set tracks bodies in CARTESIAN space only (global root + relative body pos/ori).
+    That leaves the null-space free: the robot can put every tracked body where the reference wants
+    it while the joints themselves sit somewhere else entirely, which is exactly the redundancy a
+    29-DOF humanoid has. The paper carries this term at the highest motion weight of the whole
+    table (2.0), so it is not a detail of their tuning -- it is what pins the posture.
+    """
+    motion_command = _get_motion_command_and_assert_type(env)
+    error = torch.sum(torch.square(env.simulator.dof_pos - motion_command.joint_pos), dim=-1)
+    return _multiscale_exp(error, sigma, sigmas, sigma_weights)
+
+
+def object_global_ref_lin_vel_error_exp(
+    env: WholeBodyTrackingManager,
+    sigma: float | None = None,
+    sigmas: tuple[float, ...] | None = None,
+    sigma_weights: tuple[float, ...] | None = None,
+) -> torch.Tensor:
+    """Object linear-velocity tracking (Table IV, k=2, w=1.0).
+
+    Neutral (0) on clips with no object, so a preset carrying this term can still load a
+    robot-only motion without special-casing.
+    """
+    mc = _get_motion_command_and_assert_type(env)
+    if not mc.motion.has_object:
+        return torch.zeros(env.num_envs, device=env.device)
+    error = torch.sum(torch.square(mc.object_lin_vel_w - mc.simulator_object_lin_vel_w), dim=-1)
+    return _multiscale_exp(error, sigma, sigmas, sigma_weights)
+
+
+def object_global_ref_ang_vel_error_exp(
+    env: WholeBodyTrackingManager,
+    sigma: float | None = None,
+    sigmas: tuple[float, ...] | None = None,
+    sigma_weights: tuple[float, ...] | None = None,
+) -> torch.Tensor:
+    """Object angular-velocity tracking (Table IV, k=0.2, w=1.0).
+
+    ``object_ang_vel_w`` is present in every trainer-input clip but was never read by the command
+    term until this branch; clips that predate the key report zeros for the reference, which makes
+    this term reward "hold the box still" rather than silently erroring.
+    """
+    mc = _get_motion_command_and_assert_type(env)
+    if not mc.motion.has_object:
+        return torch.zeros(env.num_envs, device=env.device)
+    error = torch.sum(torch.square(mc.object_ang_vel_w - mc.simulator_object_ang_vel_w), dim=-1)
+    return _multiscale_exp(error, sigma, sigmas, sigma_weights)
+
+
+class ContactMatch(RewardTermBase):
+    """Table IV "Contact Match": I(c = c_ref) * exp(-force_decay * (||F|| - force_target)), w=1.25.
+
+    Paid only on hands whose MEASURED contact state agrees with the reference's, then shaped so the
+    force at that contact sits near ``force_target`` (10 N in the paper): the exponent is clamped at
+    0 below the target, so under-pressing is neutral-but-matched and over-pressing decays. That
+    asymmetry is deliberate in the paper ("gradually penalizes forces that exceed 10N") -- it does
+    not ask for a minimum squeeze, it discourages crushing.
+
+    Reduced over the two hands the same way as the other bimanual contact terms
+    (``_reduce_over_contact_hands``), so its scale is identical whether the clip is one- or
+    two-handed and the configured weight carries over.
+    """
+
+    def __init__(self, cfg: RewardTermCfg, env: WholeBodyTrackingManager):
+        super().__init__(cfg, env)
+        self.env = env
+        names = cfg.params.get("hand_body_names", ("left_wrist_yaw_link", "right_wrist_yaw_link"))
+        body_names = self.env.simulator.body_names  # type: ignore[attr-defined]
+        for n in names:
+            assert n in body_names, f"hand body '{n}' not in robot bodies: {body_names}"
+        # Order is [left, right] to match ref_hand_contact_lr, which merge_dynamics.py fixes.
+        self.hand_indexes = torch.tensor(
+            [body_names.index(n) for n in names], dtype=torch.long, device=self.env.device
+        )
+        self.force_target = float(cfg.params.get("force_target", 10.0))
+        self.force_decay = float(cfg.params.get("force_decay", 0.1))
+        self.contact_threshold = float(cfg.params.get("contact_threshold", 1.0))
+
+    def reset(self, env_ids: torch.Tensor | None = None) -> None:
+        pass
+
+    def __call__(self, env: WholeBodyTrackingManager, **kwargs) -> torch.Tensor:
+        mc = _get_motion_command_and_assert_type(env)
+        if not mc.motion.has_object:
+            return torch.zeros(env.num_envs, device=env.device)
+        ref_lr = mc.ref_hand_contact_lr()                                   # (E, 2) bool
+        f = torch.norm(env.simulator.contact_forces[:, self.hand_indexes], dim=-1)  # (E, 2)
+        measured_lr = f > self.contact_threshold
+        matched = (measured_lr == ref_lr).float()
+        # clamp_min(0): only forces ABOVE the target are penalised.
+        shaped = torch.exp(-self.force_decay * (f - self.force_target).clamp_min(0.0))
+        return _reduce_over_contact_hands(matched * shaped, ref_lr)

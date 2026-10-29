@@ -212,6 +212,61 @@ def obj_ori_b(env: WholeBodyTrackingManager) -> torch.Tensor:
     return mat[..., :2].reshape(mat.shape[0], -1)
 
 
+def obj_ref_pos_b(env: WholeBodyTrackingManager) -> torch.Tensor:
+    """(num_envs, 3): where the box SHOULD be at this frame, in the torso frame.
+
+    ``obj_pos_b`` says where the box IS. Nothing told either network where it should be -- yet
+    four reward terms totalling 3.5 of the 11.0 positive weight grade exactly that difference
+    (``object_global_ref_position``, ``object_global_ref_orientation``, ``object_grasp_relative``,
+    ``object_surface_contact``). One of the two operands of the reward was simply not an input.
+
+    Unlike the body targets, this is NOT recoverable analytically. The 14 tracked body targets are
+    the forward kinematics of ``q_ref``, which the actor already has; the box is an independent
+    object whose reference trajectory is a property of the clip. The only way to infer it from the
+    current observation is to recognise the clip frame from the reference joint pose and memorise a
+    527-entry lookup -- learnable on a single clip, and degrading immediately on multi-clip runs
+    where one pose maps to several box positions.
+
+    Expressed in the torso frame like every other spatial observation, so it stays translation- and
+    yaw-invariant. Zeros on clips without an object.
+
+    DEPLOYMENT: requires replaying the reference box trajectory phase-indexed at inference -- the
+    same dependency the torque feed-forward already introduces, and cheaper (it is a pose, not a
+    torque). It is also the quantity a human operator can most easily supply: "where the box should
+    be" is the task specification.
+    """
+    mc = _get_motion_command_and_assert_type(env)
+    if not mc.motion.has_object:
+        return torch.zeros(env.num_envs, 3, device=env.device)
+    pos, _ = subtract_frame_transforms(
+        mc.robot_ref_pos_w,
+        mc.robot_ref_quat_w,
+        mc.object_pos_w,
+        mc.object_quat_w,
+    )
+    return pos.view(env.num_envs, -1)
+
+
+def obj_ref_ori_b(env: WholeBodyTrackingManager) -> torch.Tensor:
+    """(num_envs, 6): reference box orientation in the torso frame (first 2 matrix columns).
+
+    Companion of ``obj_ref_pos_b`` -- ``object_global_ref_orientation_error_exp`` (weight 1.0)
+    grades this and nothing observed it. Same 6D continuous rotation encoding as every other
+    orientation term here. Zeros on clips without an object.
+    """
+    mc = _get_motion_command_and_assert_type(env)
+    if not mc.motion.has_object:
+        return torch.zeros(env.num_envs, 6, device=env.device)
+    _, ori = subtract_frame_transforms(
+        mc.robot_ref_pos_w,
+        mc.robot_ref_quat_w,
+        mc.object_pos_w,
+        mc.object_quat_w,
+    )
+    mat = quaternion_to_matrix(ori, w_last=True)
+    return mat[..., :2].reshape(mat.shape[0], -1)
+
+
 def support_pos_b(env: WholeBodyTrackingManager) -> torch.Tensor:
     """Position de la table (objet statique) dans le repère torse -> le robot SAIT où elle est."""
     motion_command = _get_motion_command_and_assert_type(env)

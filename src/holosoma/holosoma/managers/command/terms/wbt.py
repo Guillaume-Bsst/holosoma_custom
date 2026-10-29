@@ -156,10 +156,20 @@ class MotionLoader:
                 object_quat_w = torch.tensor(data["object_quat_w"], dtype=torch.float32, device=device)
                 self._object_quat_w = object_quat_w[:, [1, 2, 3, 0]]  # Change to xyzw
                 self._object_lin_vel_w = torch.tensor(data["object_lin_vel_w"], dtype=torch.float32, device=device)
+                # WBT-RL: the clips have always carried object_ang_vel_w; it was simply never read.
+                # Needed by the DynaRetarget Table-IV object angular-velocity reward. Clips that
+                # predate the key fall back to zeros rather than failing to load.
+                if "object_ang_vel_w" in data:
+                    self._object_ang_vel_w = torch.tensor(
+                        data["object_ang_vel_w"], dtype=torch.float32, device=device
+                    )
+                else:
+                    self._object_ang_vel_w = torch.zeros_like(self._object_lin_vel_w)
             else:
                 self._object_pos_w = torch.zeros(0, 3, device=device)
                 self._object_quat_w = torch.zeros(0, 4, device=device)
                 self._object_lin_vel_w = torch.zeros(0, 3, device=device)
+                self._object_ang_vel_w = torch.zeros(0, 3, device=device)
 
             # Ground-truth hand<->object contact from the retargeting pipeline's own point-cloud
             # interaction fields (witness/distance/normal + active-in-margin, real mesh-to-mesh SDF
@@ -275,8 +285,20 @@ class MotionLoader:
                 self._dyn_foot_contact_lr = torch.tensor(
                     data["dyn_foot_contact_lr"], dtype=torch.bool, device=device
                 )
-                self._dyn_foot_grf_lr = torch.tensor(data["dyn_foot_grf_lr"], dtype=torch.float32, device=device)
+                # WBT-RL: has_dyn_contact is defined two lines up as "both boolean schedules are
+                # present", but this read demanded a THIRD key, so a clip carrying a genuine contact
+                # schedule without measured ground-reaction force (e.g. one imported from an MPC
+                # handoff rather than produced by merge_dynamics.py) crashed the loader instead of
+                # simply having no GRF. Gate it on its own key and expose has_dyn_grf so the one
+                # consumer, FeetLoadShare, can tell "no force measured" from "zero force".
+                self.has_dyn_grf = "dyn_foot_grf_lr" in data
+                self._dyn_foot_grf_lr = (
+                    torch.tensor(data["dyn_foot_grf_lr"], dtype=torch.float32, device=device)
+                    if self.has_dyn_grf
+                    else torch.zeros_like(self._dyn_foot_contact_lr, dtype=torch.float32)
+                )
             else:
+                self.has_dyn_grf = False
                 self._dyn_obj_contact_lr = torch.zeros(0, 2, dtype=torch.bool, device=device)
                 self._dyn_foot_contact_lr = torch.zeros(0, 2, dtype=torch.bool, device=device)
                 self._dyn_foot_grf_lr = torch.zeros(0, 2, device=device)
@@ -327,6 +349,10 @@ class MotionLoader:
     @property
     def object_lin_vel_w(self) -> torch.Tensor:
         return self._object_lin_vel_w[:]
+
+    @property
+    def object_ang_vel_w(self) -> torch.Tensor:
+        return self._object_ang_vel_w[:]
 
     @property
     def object_ref_contact(self) -> torch.Tensor:
@@ -413,6 +439,7 @@ class MotionLoader:
                     ("object_pos", "_object_pos_w"),
                     ("object_quat", "_object_quat_w"),
                     ("object_lin_vel", "_object_lin_vel_w"),
+                    ("object_ang_vel", "_object_ang_vel_w"),
                 ]
             )
 
@@ -582,10 +609,12 @@ class MultiMotionLoader:
             self._object_pos_w = torch.cat([ld._object_pos_w for ld in loaders], dim=0)
             self._object_quat_w = torch.cat([ld._object_quat_w for ld in loaders], dim=0)
             self._object_lin_vel_w = torch.cat([ld._object_lin_vel_w for ld in loaders], dim=0)
+            self._object_ang_vel_w = torch.cat([ld._object_ang_vel_w for ld in loaders], dim=0)
         else:
             self._object_pos_w = torch.zeros(0, 3, device=device)
             self._object_quat_w = torch.zeros(0, 4, device=device)
             self._object_lin_vel_w = torch.zeros(0, 3, device=device)
+            self._object_ang_vel_w = torch.zeros(0, 3, device=device)
 
         # Ground-truth contact (see MotionLoader): only usable if ALL clips carry it.
         self.has_gt_contact = self.has_object and all(ld.has_gt_contact for ld in loaders)
@@ -729,6 +758,10 @@ class MultiMotionLoader:
         return self._object_lin_vel_w[:]
 
     @property
+    def object_ang_vel_w(self) -> torch.Tensor:
+        return self._object_ang_vel_w[:]
+
+    @property
     def object_ref_contact(self) -> torch.Tensor:
         return self._object_ref_contact[:]
 
@@ -760,6 +793,7 @@ class MultiMotionLoader:
                     ("object_pos", "_object_pos_w"),
                     ("object_quat", "_object_quat_w"),
                     ("object_lin_vel", "_object_lin_vel_w"),
+                    ("object_ang_vel", "_object_ang_vel_w"),
                 ]
             )
 
@@ -1045,6 +1079,11 @@ class MotionCommand(CommandTermBase):
         # probe harness can toggle settling on at runtime via _settle_enabled_override.
         self.grasp_settle_cfg = self.motion_cfg.grasp_settle
         self._anchor_body_indexes: torch.Tensor | None = None
+        # Indices des corps porteurs dans l'ordre des corps du robot, resolus paresseusement au
+        # premier calcul de metriques (cf. le bloc box_force_*) : simulator.body_names n'est pas
+        # encore garanti peuple ici. Initialise INCONDITIONNELLEMENT -- le bloc has_object
+        # ci-dessous ne s'execute pas sur un clip sans objet.
+        self._object_contact_idx: torch.Tensor | None = None
         if self.motion.has_object:
             anchor_idxs = []
             for name in self.grasp_settle_cfg.anchor_body_names:
@@ -1290,10 +1329,45 @@ class MotionCommand(CommandTermBase):
                 obj_noise = obj_noise * keep
                 obj_lin_vel = obj_lin_vel * keep
             target_obj_pos = obj_pos + obj_noise
+            target_obj_ori = obj_ori
+            obj_ang_vel = torch.zeros_like(obj_lin_vel)
+
+            # --- DynaRetarget phase-conditional object randomization -----------------------
+            # Resets in the INITIAL frames perturb the object POSE; later resets perturb its
+            # VELOCITIES instead. Exclusive on purpose: the object is on the floor early (a
+            # pose offset is a real disturbance, a velocity kick just gets damped out) and
+            # in the hands later (a pose offset would tear the grasp open, a velocity offset
+            # is what the controller must actually reject). object_initial_frames == 0 leaves
+            # every branch below inert, so untouched presets behave exactly as before.
+            cfg_ip = self.init_pose_cfg
+            if getattr(cfg_ip, "object_initial_frames", 0) > 0:
+                scale = cfg_ip.overall_noise_scale
+                early = (self.time_steps[env_ids] < cfg_ip.object_initial_frames).unsqueeze(-1)
+
+                def _uniform(mag: list[float], like: torch.Tensor) -> torch.Tensor:
+                    """U(-1,1) * mag * overall_noise_scale, broadcast over env_ids."""
+                    m = torch.tensor([mag], device=self.device, dtype=like.dtype) * scale
+                    return (torch.rand(like.shape, device=self.device) - 0.5) * 2.0 * m
+
+                # EARLY: orientation noise, as a small-angle rotation applied to the reference
+                # quaternion. Position noise is already handled above by `object_pos`.
+                d_rpy = _uniform(cfg_ip.object_rot, obj_pos)
+                if float(torch.abs(d_rpy).max()) > 0.0:
+                    dq = quat_from_euler_xyz(d_rpy[:, 0], d_rpy[:, 1], d_rpy[:, 2])
+                    target_obj_ori = torch.where(early, quat_mul(dq, obj_ori, w_last=True), obj_ori)
+                # ... and the position noise must NOT fire on late resets.
+                target_obj_pos = torch.where(early, target_obj_pos, obj_pos)
+
+                # LATE: velocities around their reference values.
+                obj_lin_vel = torch.where(early, obj_lin_vel, obj_lin_vel + _uniform(cfg_ip.object_lin_vel, obj_lin_vel))
+                ref_ang_vel = self.object_ang_vel_w[env_ids]
+                obj_ang_vel = torch.where(
+                    early, obj_ang_vel, ref_ang_vel + _uniform(cfg_ip.object_ang_vel, ref_ang_vel)
+                )
 
             object_states = torch.cat(
-                [target_obj_pos, obj_ori, obj_lin_vel, torch.zeros_like(obj_lin_vel)], dim=-1
-            )  # (num_envs, 7)
+                [target_obj_pos, target_obj_ori, obj_lin_vel, obj_ang_vel], dim=-1
+            )  # (num_envs, 13)
             # 4.3 set the object states in simulator
             self._env.simulator.set_actor_states([self.object_name], env_ids, object_states)
 
@@ -1721,6 +1795,15 @@ class MotionCommand(CommandTermBase):
     def object_lin_vel_w(self) -> torch.Tensor:
         return self.motion.object_lin_vel_w[self.time_steps]
 
+    @property
+    def object_ang_vel_w(self) -> torch.Tensor:
+        """WBT-RL: reference object angular velocity, per env, at the current timestep.
+
+        Mirrors object_lin_vel_w. Needed by the DynaRetarget object angular-velocity reward
+        and by the phase-conditional reset randomization.
+        """
+        return self.motion.object_ang_vel_w[self.time_steps]
+
     #########################################################################################
     ## Object from simulator
     #########################################################################################
@@ -2104,17 +2187,71 @@ class MotionCommand(CommandTermBase):
             # Ces forces sont aussi la grandeur que lit Phi dans ObjectGripForcePotential.
             names = getattr(self._env.simulator, "_object_contact_body_names", [])
             if names:
-                fo = self._env.simulator.contact_forces_object  # (N, B, 3), B = wrists+elbows
-                mag = torch.norm(fo, dim=-1)  # (N, B)
+                # ------------------------------------------------------------------------------
+                # LE CAPTEUR FILTRE EST HORS SERVICE -- mesure du 2026-08-11, checkpoint 20000.
+                #
+                # Rollout deterministe (eval_dump_qpos, 2 envs, 150 pas), forces de contact NETTES
+                # par corps relevees en parallele de force_matrix_w :
+                #
+                #   corps                    net_forces_w max   force_matrix_w max
+                #   left/right_ankle_roll         502 / 457 N          (non sonde)
+                #   right_wrist_pitch_link            292 N                0.000 N
+                #   left_wrist_roll_link              194 N                0.000 N
+                #   right_elbow_link                  163 N                0.000 N
+                #
+                # Les pieds a ~500 N prouvent que la chaine de capteurs fonctionne. Les MEMES corps
+                # que le capteur filtre couvre lisent 100-292 N en net et exactement 0.000 N en
+                # filtre : c'est le filtrage sur la caisse qui ne remonte rien, pas l'absence de
+                # contact. Les chemins de prims concordent pourtant (l'objet est spawne sur
+                # /World/envs/env_*/Object, le filtre vise la meme expression) et aucune erreur
+                # PhysX n'apparait au log -- la cause racine n'est pas identifiee.
+                #
+                # On ne debugge donc pas PhysX ici : on rend l'instrument utilisable tout de suite en
+                # basculant sur net_forces_w, qui MARCHE. Le prix est la conflation documentee plus
+                # haut (net_forces_w somme sol + table + caisse + auto-collisions sur un corps), mais
+                # il est faible sur ces corps precis : en phase de portage l'avant-bras et le coude
+                # ne touchent rien d'autre que la caisse. La restriction aux frames de contact de la
+                # REFERENCE (box_force_in_contact) borne encore le residu.
+                #
+                # box_force_filtered_max reste loggue a cote : le jour ou il devient non nul, le
+                # filtre est repare et on peut revenir a la mesure propre.
+                fo_filtered = self._env.simulator.contact_forces_object  # (N, B, 3)
+                self.metrics["motion/box_force_filtered_max"] = torch.norm(fo_filtered, dim=-1).max(dim=-1).values
+
+                body_names = self._env.simulator.body_names
+                if self._object_contact_idx is None:
+                    self._object_contact_idx = torch.tensor(
+                        [body_names.index(bn) for bn in names], dtype=torch.long, device=self.device
+                    )
+                mag = torch.norm(
+                    self._env.simulator.contact_forces[:, self._object_contact_idx], dim=-1
+                )  # (N, B)
                 total = mag.sum(dim=-1)
                 self.metrics["motion/box_force_total"] = total
                 for i, bn in enumerate(names):
                     self.metrics[f"motion/box_force_{bn}"] = mag[:, i]
                 # Mains seules vs bras : distingue une PRISE (paumes) d'un simple appui sur
                 # l'avant-bras, que la somme confondrait.
+                #
+                # MESURE 2026-08-11, checkpoint 20000 : cette metrique vaut 0.000 N en permanence, et
+                # cette fois ce n'est PAS un bug de capteur -- wrist_yaw lit 0 sur net_forces_w aussi,
+                # pendant que wrist_pitch monte a 292 N et wrist_roll a 194 N. La policy ne saisit pas
+                # avec les mains : elle SERRE LA CAISSE ENTRE SES AVANT-BRAS. Les demi-spheres de
+                # prise (fusionnees dans wrist_yaw) ne touchent jamais rien.
+                #
+                # Consequence a instruire : les trois rewards de contact main<->caisse
+                # (object_grasp_relative_error_exp, object_surface_contact_error_exp,
+                # object_flat_contact_quality_exp) sont tous ancres sur wrist_yaw via
+                # grasp_settle.anchor_body_names, donc ils notent la distance d'un corps qui ne
+                # participe pas a la prise. C'est aussi ce que mesurait object_hand_dist ~0.46 m :
+                # non pas "la policy n'approche pas", mais "on mesure le mauvais corps".
                 hands = [i for i, bn in enumerate(names) if "wrist_yaw" in bn]
                 if hands:
                     self.metrics["motion/box_force_hands"] = mag[:, hands].sum(dim=-1)
+                # Avant-bras : la ou la prise a REELLEMENT lieu sur cette policy.
+                forearms = [i for i, bn in enumerate(names) if "wrist_roll" in bn or "wrist_pitch" in bn]
+                if forearms:
+                    self.metrics["motion/box_force_forearms"] = mag[:, forearms].sum(dim=-1)
                 # Restreint aux frames ou la reference porte : hors portage la force est ~0 et
                 # diluerait la moyenne. C'est le gating qui manquait a la version precedente --
                 # mais il reste base sur ref_contact (main pres de la caisse), donc il inclut encore
@@ -2128,6 +2265,49 @@ class MotionCommand(CommandTermBase):
                     weight = self._object_mass * 9.81
                     self.metrics["motion/object_weight_n"] = weight
                     self.metrics["motion/box_force_over_weight"] = total / weight.clamp_min(1e-3)
+
+                # ------------------------------------------------------------------------------
+                # DIAGNOSTIC DIFFERENTIEL DU CAPTEUR FILTRE (run fjj74m7c).
+                #
+                # Le probleme : box_force_* a lu 0.0000 N sur 20 500 iterations alors que la caisse
+                # etait manifestement portee (object_pos_error 0.074 m, 65 % de survie a 20 s avec
+                # terminaison objet active a 0.45 m, et la reference monte la caisse de z=0.18 a
+                # z=0.93 -- une caisse restee au sol serait a 0.75 m de sa cible et tuerait
+                # l'episode). Deux causes possibles, qui appellent des corrections opposees :
+                #
+                #   (a) le capteur FILTRE ne remonte rien. force_matrix_w reste a zero quand le
+                #       motif de filtre ne resout pas le bon nombre de prims -- erreur NON fatale,
+                #       deja documentee dans isaacsim.py, et qui se lit exactement comme
+                #       "aucun contact" ;
+                #   (b) le contact a lieu, mais sur un corps hors de la liste sondee.
+                #
+                # Statiquement on ne peut pas trancher : les demi-spheres de prise sont fusionnees
+                # dans wrist_yaw (joint fixed + collapse_fixed_joints), donc (b) n'a plus de trou
+                # anatomique evident une fois wrist_roll ajoute.
+                #
+                # CE QUI TRANCHE : la force NETTE sur les mains, lue sur un capteur DIFFERENT
+                # (contact_sensor global, non filtre). Elle somme tous les contacts d'un corps, donc
+                # elle est inexploitable comme mesure de prise -- mais comme TEMOIN elle est
+                # parfaite, parce qu'en phase de portage les mains ne touchent rien d'autre que la
+                # caisse. Lecture au prochain run :
+                #
+                #   hand_net_force_max > 0  ET  box_force_max == 0  -> cause (a), capteur filtre HS
+                #   les deux == 0                                   -> cause (b), les mains ne
+                #                                                      touchent VRAIMENT jamais la
+                #                                                      caisse, et il faut chercher
+                #                                                      ce qui la porte
+                #   les deux > 0                                    -> plus de bug, la moyenne
+                #                                                      diluait juste un contact bref
+                #
+                # Des MAX et non des moyennes : une moyenne sur tous les envs et tous les pas ne
+                # distingue pas "capteur mort" de "contact rare et court". Un max sur les envs, lui,
+                # est non nul des qu'UN seul env touche.
+                self.metrics["motion/box_force_max"] = mag.max(dim=-1).values
+                if self._anchor_body_indexes is not None:
+                    net_hand = torch.norm(
+                        self._env.simulator.contact_forces[:, self._anchor_body_indexes], dim=-1
+                    )  # (N, A) -- contact_forces est deja reordonne dans l'ordre des corps du robot
+                    self.metrics["motion/hand_net_force_max"] = net_hand.max(dim=-1).values
 
         if self.motion_cfg.use_adaptive_timesteps_sampler:
             self.adaptive_timesteps_sampler.get_stats()
@@ -2235,10 +2415,12 @@ class MotionCommand(CommandTermBase):
             object_pos = self.motion._object_pos_w[motion_idx].to(self.device)
             object_quat = self.motion._object_quat_w[motion_idx].to(self.device)
             object_lin_vel = self.motion._object_lin_vel_w[motion_idx].to(self.device)
+            object_ang_vel = self.motion._object_ang_vel_w[motion_idx].to(self.device)
         else:
             object_pos = torch.zeros(0, 3, device=self.device, dtype=torch.float32)
             object_quat = torch.zeros(0, 4, device=self.device, dtype=torch.float32)
             object_lin_vel = torch.zeros(0, 3, device=self.device, dtype=torch.float32)
+            object_ang_vel = torch.zeros(0, 3, device=self.device, dtype=torch.float32)
 
         return {
             "joint_pos": joint_pos.clone(),
@@ -2254,6 +2436,7 @@ class MotionCommand(CommandTermBase):
             "object_pos": object_pos,
             "object_quat": object_quat,
             "object_lin_vel": object_lin_vel,
+            "object_ang_vel": object_ang_vel,
         }
 
     def _add_transition_to_motion(self, default_state: dict[str, torch.Tensor], num_steps: int, prepend: bool) -> None:
@@ -2390,6 +2573,7 @@ class MotionCommand(CommandTermBase):
             state["object_pos"] = self.motion._object_pos_w[idx].to(device=device, dtype=dtype)
             state["object_quat"] = self.motion._object_quat_w[idx].to(device=device, dtype=dtype)
             state["object_lin_vel"] = self.motion._object_lin_vel_w[idx].to(device=device, dtype=dtype)
+            state["object_ang_vel"] = self.motion._object_ang_vel_w[idx].to(device=device, dtype=dtype)
         return state
 
     def _default_motion_state(
@@ -2414,6 +2598,7 @@ class MotionCommand(CommandTermBase):
             state["object_pos"] = default_state["object_pos"].to(device=device, dtype=dtype)
             state["object_quat"] = default_state["object_quat"].to(device=device, dtype=dtype)
             state["object_lin_vel"] = default_state["object_lin_vel"].to(device=device, dtype=dtype)
+            state["object_ang_vel"] = default_state["object_ang_vel"].to(device=device, dtype=dtype)
         return state
 
     def _build_transition_segments(
@@ -2441,6 +2626,7 @@ class MotionCommand(CommandTermBase):
         if self.motion.has_object:
             segments["object_pos"] = _lerp(start["object_pos"], target["object_pos"], alphas_joint)
             segments["object_lin_vel"] = _lerp(start["object_lin_vel"], target["object_lin_vel"], alphas_joint)
+            segments["object_ang_vel"] = _lerp(start["object_ang_vel"], target["object_ang_vel"], alphas_joint)
             segments["object_quat"] = self._slerp_quat_sequence(
                 start["object_quat"].unsqueeze(0), target["object_quat"].unsqueeze(0), alphas
             ).squeeze(1)

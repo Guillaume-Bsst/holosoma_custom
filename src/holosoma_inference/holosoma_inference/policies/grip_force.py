@@ -82,6 +82,19 @@ class GripForceParams:
         "right_wrist_pitch_joint",
         "right_wrist_yaw_joint",
     )
+    use_reference_profile: bool = False
+    """Commande le couple de serrage MESURE par main/frame depuis le sidecar dynamique de l'etage 05
+    (``dyn_grip_force_lr``, N) au lieu de ``target_force_n`` constant -- miroir de
+    ``holosoma.config_types.action.GripForceCfg.use_reference_profile``. DOIT etre True pour tout
+    checkpoint entraine avec ce flag (sinon le couple de serrage rejoue est un plat constant la ou
+    la policy a appris un profil variable par main). Retombe automatiquement sur ``target_force_n``
+    si le clip ne porte pas ``dyn_grip_force_lr``, toujours plafonne par ``force_command_max_n``.
+
+    Le gate de contact suit la meme regle : si le clip porte ``dyn_obj_contact_lr`` (contact PAR
+    MAIN mesure par le solve physique), il remplace le flag ``object_ref_contact`` (un seul flag,
+    les deux mains serrent ensemble) independamment de ce reglage -- c'est la meilleure info
+    disponible des qu'elle existe, cf. ``MotionCommand.ref_hand_contact_lr`` cote entrainement."""
+
     max_wrist_torque_frac: float = 0.75
     """Fraction de la limite d'effort URDF allouee au feedforward, PAR ARTICULATION.
 
@@ -189,8 +202,10 @@ class GripForceBias:
         self._ref_offset = np.asarray(params.ref_body_offset, dtype=float)
         self._target_n = float(min(params.target_force_n, params.force_command_max_n))
 
-        # Flag de contact GT du clip, meme indexation que obj_pos_b.
-        self._contact: np.ndarray | None = None
+        # Contact PAR MAIN (T, 2) [left, right] et profil de force (T, 2) [left, right], meme
+        # indexation que obj_pos_b. None tant que load_contact_flags() n'a pas tourne.
+        self._active_lr: np.ndarray | None = None
+        self._force_lr: np.ndarray | None = None
 
         if params.gate not in ("clip", "distance", "both"):
             raise ValueError(f"gate='{params.gate}' inconnu ; attendu clip | distance | both.")
@@ -216,35 +231,66 @@ class GripForceBias:
         return self.model.getFrameId(name)
 
     def load_contact_flags(self, npz_path: str, prepend: int = 0) -> None:
-        """Charge ``object_ref_contact`` du clip -- la meme porte que ``MotionCommand.grip_active``.
+        """Charge le gate de contact et (si demande) le profil de force, meme porte que
+        ``MotionCommand.grip_active_lr`` / ``dyn_grip_force_lr`` cote entrainement.
 
-        Sans ce flag la force serait appliquee en permanence, y compris pendant l'approche et
+        Contact PAR MAIN : prefere ``dyn_obj_contact_lr`` (mesure par le solve physique de l'etage
+        05, present des que le clip est enrichi) ; retombe sur ``object_ref_contact`` (un seul flag,
+        broadcast aux deux mains) pour les clips plus anciens -- exactement le fallback de
+        ``MotionCommand.ref_hand_contact_lr``.
+
+        Sans aucun des deux la force serait appliquee en permanence, y compris pendant l'approche et
         apres le depot, ou elle pousserait les poignets vers une caisse qu'ils ne touchent pas.
         """
         if self.params.gate == "distance":
             logger.info("gate='distance' : le flag de contact GT du clip n'est pas utilise.")
             return
         data = np.load(npz_path, allow_pickle=True)
-        if "object_ref_contact" not in data.files:
+
+        if "dyn_obj_contact_lr" in data.files:
+            active_lr = np.asarray(data["dyn_obj_contact_lr"], dtype=bool)  # (T, 2) [left, right]
+            source = "dyn_obj_contact_lr (contact mesure par main)"
+        elif "object_ref_contact" in data.files:
+            contact = np.asarray(data["object_ref_contact"], dtype=bool)
+            active_lr = np.repeat(contact[:, None], 2, axis=1)  # les deux mains serrent ensemble
+            source = "object_ref_contact (flag unique, broadcast aux deux mains)"
+        else:
             raise ValueError(
-                f"{npz_path} ne porte pas object_ref_contact : ce clip n'a pas de contact GT, "
-                f"le biais de prise n'a pas de porte et serait applique en continu. "
+                f"{npz_path} ne porte ni dyn_obj_contact_lr ni object_ref_contact : ce clip n'a pas "
+                f"de contact GT, le biais de prise n'a pas de porte et serait applique en continu. "
                 f"Utiliser gate='distance' si la pose de caisse est mesuree (mocap)."
             )
-        contact = np.asarray(data["object_ref_contact"], dtype=bool)
+
+        force_lr = None
+        if self.params.use_reference_profile:
+            if "dyn_grip_force_lr" in data.files:
+                force_lr = np.asarray(data["dyn_grip_force_lr"], dtype=np.float64)  # (T, 2) N
+            else:
+                logger.warning(
+                    f"{npz_path} ne porte pas dyn_grip_force_lr : use_reference_profile retombe sur "
+                    f"target_force_n={self._target_n:.1f} N constant (comme cote entrainement)."
+                )
+
         if prepend:
-            contact = np.concatenate([np.repeat(contact[:1], prepend, axis=0), contact], axis=0)
-        self._contact = contact
+            active_lr = np.concatenate([np.repeat(active_lr[:1], prepend, axis=0), active_lr], axis=0)
+            if force_lr is not None:
+                force_lr = np.concatenate([np.repeat(force_lr[:1], prepend, axis=0), force_lr], axis=0)
+
+        self._active_lr = active_lr
+        self._force_lr = force_lr
         logger.info(
-            f"Contact GT charge depuis {npz_path.split('/')[-1]} : {contact.shape[0]} frames "
-            f"(prepend={prepend}), contact actif sur {100 * contact.mean():.1f} % des frames."
+            f"Gate de prise charge depuis {npz_path.split('/')[-1]} ({source}) : {active_lr.shape[0]} "
+            f"frames (prepend={prepend}), actif L={100 * active_lr[:, 0].mean():.1f}% "
+            f"R={100 * active_lr[:, 1].mean():.1f}%. Profil de force : "
+            f"{'dyn_grip_force_lr' if force_lr is not None else f'constant {self._target_n:.1f} N'}."
         )
 
     def is_gripping(self, motion_timestep: float) -> bool:
-        if self._contact is None:
+        """OU des deux mains -- conserve pour compat / debug, ``compute`` lit ``_active_lr`` direct."""
+        if self._active_lr is None:
             return False
-        idx = int(np.clip(int(round(motion_timestep)), 0, self._contact.shape[0] - 1))
-        return bool(self._contact[idx])
+        idx = int(np.clip(int(round(motion_timestep)), 0, self._active_lr.shape[0] - 1))
+        return bool(self._active_lr[idx].any())
 
     def compute(self, joint_pos: np.ndarray, obj_pos_b: np.ndarray, motion_timestep: float) -> np.ndarray:
         """Couple feedforward (num_dofs,) a additionner a ``cmd_tau``.
@@ -260,9 +306,22 @@ class GripForceBias:
         self.last_active = False
 
         gate = self.params.gate
-        clip_open = self.is_gripping(motion_timestep) if gate in ("clip", "both") else True
-        if gate == "clip" and not clip_open:
-            # Mode clip pur : rien a calculer, la FK serait du travail perdu.
+        if self._active_lr is not None:
+            idx = int(np.clip(int(round(motion_timestep)), 0, self._active_lr.shape[0] - 1))
+            clip_open_lr = {"left": bool(self._active_lr[idx, 0]), "right": bool(self._active_lr[idx, 1])}
+            target_lr = (
+                {
+                    "left": float(min(self._force_lr[idx, 0], self.params.force_command_max_n)),
+                    "right": float(min(self._force_lr[idx, 1], self.params.force_command_max_n)),
+                }
+                if self._force_lr is not None
+                else {"left": self._target_n, "right": self._target_n}
+            )
+        else:
+            clip_open_lr = {"left": True, "right": True}
+            target_lr = {"left": self._target_n, "right": self._target_n}
+        if gate == "clip" and not any(clip_open_lr.values()):
+            # Mode clip pur : aucune main active, rien a calculer, la FK serait du travail perdu.
             return tau
 
         pin = self._pin
@@ -289,11 +348,15 @@ class GripForceBias:
             self.last_hand_distance = float("nan")
             dist_open = True
 
-        if not (clip_open and dist_open):
+        if not dist_open or not any(clip_open_lr.values()):
             return tau
         self.last_active = True
 
+        engage_dist = self.params.contact_distance_m
+
         for side, fids in self._chain_fids.items():
+            if gate in ("clip", "both") and not clip_open_lr[side]:
+                continue
             # Poses de la chaine ramenees dans le repere torse : meme repere que obj_pos_b.
             rel = [M_ref.actInv(self.data.oMf[f]) for f in fids]
             (p_elbow, R_elbow), (p_roll, R_roll), (p_pitch, R_pitch), (p_yaw, R_yaw) = [
@@ -310,7 +373,15 @@ class GripForceBias:
             norm = float(np.linalg.norm(squeeze))
             if norm < 1e-6:
                 continue
-            force = (self._target_n / norm) * squeeze
+
+            # Rampe de proximite (identique a l'entrainement, meme hors mode profil) : monte
+            # lineairement de 0 a engage_dist*2 jusqu'a 1 a engage_dist, evite d'injecter la force
+            # pleine des que le flag de contact bascule alors que la main est encore loin.
+            proximity_gate = float(np.clip(1.0 - (norm - engage_dist) / engage_dist, 0.0, 1.0))
+            command_force = target_lr[side] * proximity_gate
+            if command_force <= 0.0:
+                continue
+            force = (command_force / norm) * squeeze
 
             wrist_tau = jacobian.T @ force
             cap = self._wrist_tau_cap[side]
@@ -319,6 +390,6 @@ class GripForceBias:
                 self.saturation_count += int(saturated.sum())
             wrist_tau = np.clip(wrist_tau, -cap, cap)
             tau[self._wrist_dof_idx[side]] += wrist_tau
-            self.last_force_n[side] = self._target_n
+            self.last_force_n[side] = command_force
 
         return tau

@@ -251,3 +251,86 @@ __all__ = [
     "g1_27dof_wbt_command",
     "g1_27dof_wbt_command_w_object",
 ]
+
+
+# =====================================================================================
+# DynaRetarget (arXiv:2602.06827): phase-conditional object reset randomization.
+#
+#   "when the episode is reset during the initial frames, we randomize the object pose
+#    (p_obj, theta_obj) around the desired object pose. When the reset occurs after the
+#    initial frames, we instead randomize the object velocities (v_obj, omega_obj) around
+#    their desired values."
+#
+# object_initial_frames = 136 is MEASURED, not guessed: on this clip the box sits at
+# z=0.180 until frame 136 (2.72 s at 50 Hz) and only then leaves the floor. That is
+# precisely the boundary the paper's two regimes describe -- before it, the box is free on
+# the ground and a pose offset is a real disturbance the robot must re-approach; after it,
+# the box is in the hands, where a pose offset would tear the grasp open and a velocity
+# offset is the thing the controller actually has to reject. This number is CLIP-SPECIFIC:
+# re-measure it for any other motion.
+#
+# object_pos keeps the repo's existing [0.05, 0.05, 0.0] -- the box is free on the floor in
+# the regime where this now fires, so 5 cm is safe, and z stays 0 because lifting a resting
+# box either drops it or penetrates the floor.
+#
+# object_rot is YAW-ONLY. Roll/pitch would tilt a box resting flat on one face, which the
+# solver immediately undoes -- it randomizes nothing and costs contact transients. 0.15 rad
+# is +/-8.6 deg of heading, which does change how the robot must approach.
+#
+# Velocities are ~15-20% of the clip's own p90 (0.937 m/s, 2.086 rad/s).
+# =====================================================================================
+init_pose_config_dynaretarget = replace(
+    init_pose_config,
+    object_rot=[0.0, 0.0, 0.15],
+    object_lin_vel=[0.15, 0.15, 0.15],
+    object_ang_vel=[0.4, 0.4, 0.4],
+    object_initial_frames=136,
+)
+
+g1_29dof_wbt_command_w_object_femto14_box36_dynaretarget = replace(
+    g1_29dof_wbt_command_w_object_femto14_box36,
+    setup_terms={
+        "motion_command": CommandTermCfg(
+            func="holosoma.managers.command.terms.wbt:MotionCommand",
+            params={
+                "motion_config": replace(
+                    motion_config_w_object_femto14_box36,
+                    noise_to_initial_pose=init_pose_config_dynaretarget,
+                ),
+            },
+        )
+    },
+)
+
+# Same clip, but the reference motion is now SBTO's OWN dynamically-feasible solve
+# (wbt_rl/scripts/sbto_to_trainer_input.py, run "halfsphere_bigbudget", cost 441.9) instead of
+# the kinematic-retarget-only femto14_box36_w_obj_gtcontact_nobj.npz every other preset above
+# points to. Real per-frame hand<->object contact (dyn_obj_contact_lr, 86/54 frames) and
+# foot<->floor contact (dyn_foot_contact_lr) come from replaying that exact solve through
+# MuJoCo, not a distance heuristic -- object_contact_match (the only contact-consuming reward
+# term in g1_29dof_wbt_reward_dynaretarget) gets a real signal instead of the always-zero one
+# the old SPIDER-sourced clip produced. Absolute path: resolve_data_file_path (utils/path.py)
+# passes absolute paths through unchanged, so the file does not need to live inside holosoma's
+# package data dir.
+motion_config_w_object_femto14_box36_sbto = replace(
+    motion_config_w_object_femto14_box36,
+    motion_file=(
+        "/home/ecarn/Documents/wbt_rl/data/01_retargeted_motions/dynaretarget/"
+        "femto14_box36_sbto_halfsphere_bigbudget_trainer_input.npz"
+    ),
+)
+
+g1_29dof_wbt_command_w_object_femto14_box36_dynaretarget_sbto = replace(
+    g1_29dof_wbt_command_w_object_femto14_box36,
+    setup_terms={
+        "motion_command": CommandTermCfg(
+            func="holosoma.managers.command.terms.wbt:MotionCommand",
+            params={
+                "motion_config": replace(
+                    motion_config_w_object_femto14_box36_sbto,
+                    noise_to_initial_pose=init_pose_config_dynaretarget,
+                ),
+            },
+        )
+    },
+)

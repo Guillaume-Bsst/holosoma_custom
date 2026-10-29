@@ -21,7 +21,7 @@ from holosoma.simulator.base_simulator.base_simulator import BaseSimulator
 from holosoma.simulator.mujoco.backends import WARP_AVAILABLE, ClassicBackend, WarpBackend
 from holosoma.simulator.mujoco.command_registry import CommandRegistry
 from holosoma.simulator.mujoco.fields import prepare_fields, prepare_manager_fields
-from holosoma.simulator.mujoco.object_spawn import resolve_box_spawn, resolve_support_spawn
+from holosoma.simulator.mujoco.object_spawn import resolve_box_spawn, resolve_stairs_spawn, resolve_support_spawn
 from holosoma.simulator.mujoco.scene_manager import MujocoSceneManager
 from holosoma.simulator.mujoco.tensor_views import (
     create_base_linear_acceleration_view,
@@ -417,6 +417,14 @@ class MuJoCo(BaseSimulator):
             if support is not None:
                 vertices, faces, pos, quat = support
                 self.scene_manager.add_static_mesh("support_table", vertices, faces, pos, quat)
+
+        # Optional static staircase (SimEngineConfig.add_stairs): a non-convex shape decomposed
+        # into per-level convex boxes (see resolve_stairs_spawn / add_static_boxes) so MuJoCo's
+        # box collision is exact -- a single mesh here would hull-collapse the steps into a ramp.
+        if getattr(sim_cfg, "add_stairs", False):
+            boxes = resolve_stairs_spawn(sim_cfg, self.robot_config)
+            if boxes is not None:
+                self.scene_manager.add_static_boxes("stairs", boxes)
 
     def _set_robot_properties(self) -> None:
         """Set robot properties including DOF names, body names, and index mappings.

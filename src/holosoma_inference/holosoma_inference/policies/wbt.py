@@ -141,11 +141,38 @@ class WholeBodyTrackingPolicy(BasePolicy):
                     target_force_n=float(config.task.grip_force_target_n),
                     gate=str(getattr(config.task, "grip_force_gate", "clip")),
                     contact_distance_m=float(getattr(config.task, "grip_force_contact_distance_m", 0.35)),
+                    use_reference_profile=bool(getattr(config.task, "grip_force_use_reference_profile", False)),
                 ),
             )
             self._grip_force.load_contact_flags(
                 config.task.object_motion_file, config.task.motion_prepend_timesteps
             )
+
+        # Feed-forward de couple de reference (etage 05 / SPIDER). Voir
+        # policies/torque_feedforward.py pour le detail : ce couple est ajoute par l'ENVIRONNEMENT a
+        # l'entrainement, jamais par le reseau, donc il doit etre reconstruit ici.
+        self._torque_ff = None
+        if getattr(config.task, "torque_feedforward_enable", False):
+            from holosoma_inference.policies.torque_feedforward import (  # noqa: PLC0415 -- optionnel
+                TorqueFeedforwardBias,
+                TorqueFeedforwardParams,
+            )
+
+            if not getattr(config.task, "object_motion_file", None):
+                raise ValueError(
+                    "--task.torque-feedforward-enable exige --task.object-motion-file : c'est ce "
+                    "clip qui doit porter le champ dyn_tau (enrichi par "
+                    "wbt_rl/scripts/merge_dynamics.py)."
+                )
+            self._torque_ff = TorqueFeedforwardBias(
+                tuple(self.robot_config.dof_names),
+                TorqueFeedforwardParams(
+                    scale=float(config.task.torque_feedforward_scale),
+                    exclude_joint_names=tuple(config.task.torque_feedforward_exclude_joint_names),
+                    max_abs_nm=config.task.torque_feedforward_max_nm,
+                ),
+            )
+            self._torque_ff.load(config.task.object_motion_file, config.task.motion_prepend_timesteps)
 
         # Load stiff startup parameters from robot config
         if config.robot.stiff_startup_pos is not None:
@@ -257,25 +284,33 @@ class WholeBodyTrackingPolicy(BasePolicy):
             )
 
     def _update_feedforward_torque(self, robot_state_data, policy_active: bool) -> None:
-        """Rejoue le biais de couple de prise dans ``cmd_tau``.
+        """Rejoue dans ``cmd_tau`` les biais de couple appliques par l'environnement a
+        l'entrainement : biais de grip-force et/ou feed-forward de couple de reference (etage 05).
+        Additifs, meme ordre que ``JointPositionActionTerm._compute_torques``
+        (``torques = ... + grip_bias + scale * dyn_tau``).
 
-        Pendant a l'inference de ``JointPositionActionTerm._compute_grip_force_bias``. Valide
-        contre la formule d'entrainement sur le clip femto14_box36 : 0.54 % d'ecart median sur le
-        couple, 1.42 % au pire, et zero exact sur les 162 frames hors contact.
+        Grip-force pendante de ``_compute_grip_force_bias``. Validee contre la formule
+        d'entrainement sur le clip femto14_box36 : 0.54 % d'ecart median sur le couple, 1.42 % au
+        pire, et zero exact sur les 162 frames hors contact.
         """
-        if self._grip_force is None:
+        if self._grip_force is None and self._torque_ff is None:
             super()._update_feedforward_torque(robot_state_data, policy_active)
             return
-        if not policy_active or self._last_obj_pos_b is None:
+        if not policy_active:
             self.cmd_tau[:] = 0.0
             return
 
-        joint_pos = np.asarray(robot_state_data[0, 7 : 7 + self.num_dofs], dtype=float)
-        self.cmd_tau[:] = self._grip_force.compute(
-            joint_pos,
-            np.asarray(self._last_obj_pos_b, dtype=float).reshape(3),
-            self.curr_motion_timestep,
-        )
+        tau = np.zeros(self.num_dofs, dtype=np.float64)
+        if self._grip_force is not None and self._last_obj_pos_b is not None:
+            joint_pos = np.asarray(robot_state_data[0, 7 : 7 + self.num_dofs], dtype=float)
+            tau += self._grip_force.compute(
+                joint_pos,
+                np.asarray(self._last_obj_pos_b, dtype=float).reshape(3),
+                self.curr_motion_timestep,
+            )
+        if self._torque_ff is not None:
+            tau += self._torque_ff.compute(self.curr_motion_timestep)
+        self.cmd_tau[:] = tau
 
     def _get_ref_body_orientation_in_world(self, robot_state_data):
         # Create configuration for pinocchio robot

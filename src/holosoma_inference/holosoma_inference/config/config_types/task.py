@@ -182,6 +182,43 @@ class TaskConfig:
     grip_force_contact_distance_m: float = 0.35
     """Seuil du mode ``distance``, aligne sur ``grasp_settle.contact_distance_threshold``."""
 
+    grip_force_use_reference_profile: bool = False
+    """Rejoue le PROFIL de force mesure par main/frame (``dyn_grip_force_lr``) au lieu du
+    ``target_force_n`` constant, et le gate de contact PAR MAIN (``dyn_obj_contact_lr``) au lieu du
+    flag unique ``object_ref_contact``. DOIT egaler
+    ``action.terms.joint_control.params.grip_force.use_reference_profile`` du run d'entrainement --
+    miroir exact de ``GripForceCfg.use_reference_profile``. Retombe automatiquement sur le mode
+    constant si le clip ne porte pas ``dyn_grip_force_lr``."""
+
+    torque_feedforward_enable: bool = False
+    """Rejoue a l'inference le feed-forward de couple de reference (etage 05 / SPIDER) applique a
+    l'entrainement.
+
+    OBLIGATOIRE pour tout checkpoint entraine avec
+    ``--action.terms.joint-control.params.torque-feedforward.enable True`` (preset
+    ``g1_29dof_joint_pos_grip_force_dyn``). Ce couple ne sort PAS du reseau : il est ajoute par
+    l'environnement dans ``_compute_torques``, donc l'ONNX n'en contient rien. Sans ce flag,
+    ``cmd_tau`` ne contient (au mieux) que le biais de grip-force -- la policy a appris a corriger
+    autour d'un couple de gravite/inertie qu'aucune couche de l'inference ne fournit.
+
+    Requiert ``object_motion_file`` pointant sur un clip enrichi par
+    ``wbt_rl/scripts/merge_dynamics.py`` (porte le champ ``dyn_tau``)."""
+
+    torque_feedforward_scale: float = 0.5
+    """Fraction du couple de reference injectee. DOIT egaler
+    ``action.terms.joint_control.params.torque_feedforward.scale`` du run d'entrainement."""
+
+    torque_feedforward_exclude_joint_names: tuple[str, ...] = ()
+    """DOF a exclure du feed-forward (sous-chaine). DOIT reprendre exactement
+    ``exclude_joint_names`` du run d'entrainement -- typiquement les poignets qui saturent le couple
+    de reference contre leur butee d'actionneur (cf. ``TorqueFeedforwardCfg.exclude_joint_names``)."""
+
+    torque_feedforward_max_nm: float | None = None
+    """Plafond optionnel (N.m) applique au feed-forward seul, tous DOF actifs confondus. A
+    l'entrainement le clip final borne le couple TOTAL (PD + biais) contre les limites reelles de
+    l'actionneur ; a l'inference le PD est calcule dans le driver moteur et invisible ici, donc on
+    ne peut borner QUE le feed-forward. ``None`` = pas de plafond."""
+
     debug: DebugConfig = DebugConfig()
     """Debug overrides for quick testing."""
 

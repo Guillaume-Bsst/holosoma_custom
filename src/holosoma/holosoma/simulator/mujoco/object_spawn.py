@@ -196,6 +196,105 @@ def resolve_support_spawn(
     return vertices, faces_arr, origin, quat
 
 
+def _mat_to_quat_wxyz(rot: np.ndarray) -> np.ndarray:
+    """3x3 rotation matrix -> (w,x,y,z) quaternion (Shepperd's method)."""
+    m00, m01, m02 = rot[0]
+    m10, m11, m12 = rot[1]
+    m20, m21, m22 = rot[2]
+    trace = m00 + m11 + m22
+    if trace > 0:
+        s = 0.5 / np.sqrt(trace + 1.0)
+        w, x, y, z = 0.25 / s, (m21 - m12) * s, (m02 - m20) * s, (m10 - m01) * s
+    elif m00 > m11 and m00 > m22:
+        s = 2.0 * np.sqrt(1.0 + m00 - m11 - m22)
+        w, x, y, z = (m21 - m12) / s, 0.25 * s, (m01 + m10) / s, (m02 + m20) / s
+    elif m11 > m22:
+        s = 2.0 * np.sqrt(1.0 + m11 - m00 - m22)
+        w, x, y, z = (m02 - m20) / s, (m01 + m10) / s, 0.25 * s, (m12 + m21) / s
+    else:
+        s = 2.0 * np.sqrt(1.0 + m22 - m00 - m11)
+        w, x, y, z = (m10 - m01) / s, (m02 + m20) / s, (m12 + m21) / s, 0.25 * s
+    return np.array([w, x, y, z])
+
+
+def resolve_stairs_spawn(sim_cfg: SimEngineConfig, robot_config: RobotConfig):
+    """Resolve a list of (pos[3], half_extents[3], quat_wxyz[4]) static boxes for a HoloV2
+    staircase, one overlapping box per height LEVEL (landing + each tread) -- see
+    `SceneManager.add_static_boxes` for why per-level boxes (not a single mesh) are needed for a
+    non-convex shape like a staircase.
+
+    Reads `stairs_params_file` -- the exact `stair_params.npz` the retargeting stage saved when
+    it built the staircase mesh (riser/going/n_steps/s0/z_min/center_xy/forward/lateral/stances,
+    plus `isaac_z_shift` applied to the Isaac-side clip's body_pos_w/joint_pos so the landing sits
+    at z=0 there -- the SAME shift must be applied here for the two sims to agree). Each box's
+    clip-world pose is re-anchored to THIS scene's robot init pose exactly like
+    `resolve_support_spawn` does for the table (yaw+XY only, heights untouched).
+    """
+    if not (sim_cfg.add_stairs and sim_cfg.stairs_params_file and sim_cfg.object_motion_file):
+        return None
+
+    p = np.load(resolve_data_file_path(sim_cfg.stairs_params_file))
+    riser, going, n_steps = float(p["riser"]), float(p["going"]), int(p["n_steps"])
+    s0 = float(p["s0"])
+    z_min = float(p["z_min"]) + float(p["isaac_z_shift"])
+    center_xy = p["center_xy"].astype(np.float64)
+    forward = p["forward"].astype(np.float64)
+    lateral = p["lateral"].astype(np.float64)
+    stances = p["stances"].astype(np.float64)
+
+    xy0 = stances[:, :2] - center_xy[None, :]
+    w_coord = xy0 @ lateral
+    box_rot = np.stack(
+        [np.array([forward[0], forward[1], 0.0]), np.array([lateral[0], lateral[1], 0.0]), np.array([0.0, 0.0, 1.0])],
+        axis=1,
+    )
+    quat_clipworld = _mat_to_quat_wxyz(box_rot)
+
+    data = np.load(resolve_data_file_path(sim_cfg.object_motion_file))
+    t_idx = int(np.clip(sim_cfg.object_motion_start_timestep, 0, data["joint_pos"].shape[0] - 1))
+    clip_root = data["joint_pos"][t_idx, :7]
+
+    # Extend the landing (lowest level) and the far end to cover the FULL horizontal range the
+    # clip's root actually visits, not just the "aesthetic" stair span derived from the ascending
+    # footplants (stances). On Isaac the SDF softly extends past the literal mesh edge (a
+    # continuous distance field), so a too-short mesh there is forgiving; a MuJoCo box geom is
+    # not -- past its edge is a true void, which is what made the robot "climb into nothing"
+    # before this fix.
+    root_xy0 = data["joint_pos"][:, :2] - center_xy[None, :]
+    root_s = root_xy0 @ forward
+    root_w = root_xy0 @ lateral
+    margin = 0.5
+    s_lead0 = min(s0 - going, float(root_s.min()) - margin)
+    s_end = max(s0 + (n_steps + 1) * going, float(root_s.max()) + margin)
+    w_lo = min(float(w_coord.min()), float(root_w.min())) - 0.3
+    w_hi = max(float(w_coord.max()), float(root_w.max())) + 0.3
+    base_z = z_min - 0.5  # deep base so no gap shows under the lowest step at the scene border
+
+    levels = [(s_lead0, z_min)] + [(s0 + n * going, z_min + (n + 1) * riser) for n in range(n_steps)]
+    boxes = []
+    for s_lead, z_top in levels:
+        hx, hy, hz = (s_end - s_lead) / 2.0, (w_hi - w_lo) / 2.0, (z_top - base_z) / 2.0
+        s_c, w_c, z_c = (s_lead + s_end) / 2.0, (w_lo + w_hi) / 2.0, (base_z + z_top) / 2.0
+        pos_xy = center_xy + s_c * forward + w_c * lateral
+        pos_clipworld = np.array([pos_xy[0], pos_xy[1], z_c])
+        pos_world, quat_world = _reanchor_yawxy(
+            pos_clipworld, quat_clipworld, clip_root, robot_config.init_state.pos, robot_config.init_state.rot
+        )
+        boxes.append((pos_world, np.array([hx, hy, hz]), quat_world))
+
+    logger.info(
+        f"Stairs '{sim_cfg.stairs_params_file}': {len(boxes)} convex boxes, "
+        f"riser={riser:.3f} going={going:.3f} n_steps={n_steps} "
+        f"s_lead0={s_lead0:.3f} s_end={s_end:.3f}"
+    )
+    logger.info(
+        f"Stairs debug: clip_root (frame {t_idx}) xy={clip_root[:2].round(3).tolist()} -> "
+        f"robot spawns at robot_config.init_state.pos={list(robot_config.init_state.pos)}. "
+        f"Box world centers: " + ", ".join(f"L{i}={b[0].round(3).tolist()}" for i, b in enumerate(boxes))
+    )
+    return boxes
+
+
 def robot_init_state_from_clip(sim_cfg: SimEngineConfig, robot_config: RobotConfig) -> RobotConfig | None:
     """Return a robot config whose init_state matches the clip's frame-0 root pose, or None.
 
