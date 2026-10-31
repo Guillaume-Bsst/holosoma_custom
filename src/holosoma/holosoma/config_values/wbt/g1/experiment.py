@@ -263,6 +263,15 @@ g1_29dof_wbt_w_object_actor = replace(
     observation=observation.g1_29dof_wbt_observation_w_object_actor,
 )
 
+# FastSAC with the observations of w_object_actor: against w_object_actor (PPO) only the algorithm and the run name
+# differ, so that an A/B of the two algorithms on the box clips is clean (OTRNet E2). The same replace as
+# w_object_actor from w_object.
+g1_29dof_wbt_fast_sac_w_object_actor = replace(
+    g1_29dof_wbt_fast_sac_w_object,
+    training=replace(g1_29dof_wbt_fast_sac_w_object.training, name="g1_29dof_wbt_fast_sac_w_object_actor"),
+    observation=observation.g1_29dof_wbt_observation_w_object_actor,
+)
+
 # Portage caisse + table avec FORCE DE PRISE REELLE (60 N par main) au lieu du curriculum de
 # physicalite. La caisse est physique des le step 0 ; chaque main la presse a
 # grip_force.target_force_n des que le flag de contact GT du command term est actif (cf.
@@ -374,6 +383,7 @@ __all__ = [
     "g1_29dof_wbt",
     "g1_29dof_wbt_fast_sac",
     "g1_29dof_wbt_fast_sac_w_object",
+    "g1_29dof_wbt_fast_sac_w_object_actor",
     "g1_29dof_wbt_w_object",
     "g1_29dof_wbt_w_object_actor",
     "g1_29dof_wbt_w_object_actor_grip_force",
