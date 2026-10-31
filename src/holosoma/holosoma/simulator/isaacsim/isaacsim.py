@@ -194,6 +194,41 @@ class IsaacSim(BaseSimulator):
 
         logger.info("Completed setting up the environment...")
 
+    def _object_cfg(self, urdf_path: str) -> RigidObjectCfg:
+        """The object's RigidObjectCfg, spawned from ``urdf_path`` (robot.object.object_urdf_path) in every env.
+        Moved out of _setup_scene unchanged, so that a subclass can spawn otherwise."""
+        # Resolve the object asset urdf path using importlib.resources
+        object_asset_urdf_path = resolve_data_file_path(urdf_path)
+        return RigidObjectCfg(
+            prim_path=f"/World/envs/env_.*/Object",
+            spawn=sim_utils.UrdfFileCfg(
+                fix_base=False,
+                replace_cylinders_with_capsules=True,
+                asset_path=object_asset_urdf_path,
+                activate_contact_sensors=True,
+                rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                    disable_gravity=False,
+                    retain_accelerations=False,
+                    linear_damping=0.01,
+                    angular_damping=0.01,
+                    max_linear_velocity=1000.0,
+                    max_angular_velocity=1000.0,
+                    max_depenetration_velocity=1.0,
+                ),
+                articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+                    enabled_self_collisions=True,
+                    solver_position_iteration_count=8,
+                    solver_velocity_iteration_count=4,
+                ),
+                joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+                    gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
+                ),
+            ),
+            init_state=RigidObjectCfg.InitialStateCfg(
+                pos=(0.0, 0.0, 0.5),
+            ),
+        )
+
     def _setup_scene(self) -> None:
         self._load_scene_config()
 
@@ -412,38 +447,8 @@ class IsaacSim(BaseSimulator):
 
         # add objects if object is provided
         if self.robot_config.object.object_urdf_path:
-            # Resolve the object asset urdf path using importlib.resources
-            object_asset_urdf_path = resolve_data_file_path(self.robot_config.object.object_urdf_path)
             object_name = "object"  # hardcoded object name
-            object_cfg = RigidObjectCfg(
-                prim_path=f"/World/envs/env_.*/Object",
-                spawn=sim_utils.UrdfFileCfg(
-                    fix_base=False,
-                    replace_cylinders_with_capsules=True,
-                    asset_path=object_asset_urdf_path,
-                    activate_contact_sensors=True,
-                    rigid_props=sim_utils.RigidBodyPropertiesCfg(
-                        disable_gravity=False,
-                        retain_accelerations=False,
-                        linear_damping=0.01,
-                        angular_damping=0.01,
-                        max_linear_velocity=1000.0,
-                        max_angular_velocity=1000.0,
-                        max_depenetration_velocity=1.0,
-                    ),
-                    articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-                        enabled_self_collisions=True,
-                        solver_position_iteration_count=8,
-                        solver_velocity_iteration_count=4,
-                    ),
-                    joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
-                        gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
-                    ),
-                ),
-                init_state=RigidObjectCfg.InitialStateCfg(
-                    pos=(0.0, 0.0, 0.5),
-                ),
-            )
+            object_cfg = self._object_cfg(self.robot_config.object.object_urdf_path)
             self._object = RigidObject(object_cfg)
             self.scene.rigid_objects[object_name] = self._object
 
