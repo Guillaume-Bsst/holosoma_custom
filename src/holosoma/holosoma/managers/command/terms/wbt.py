@@ -1081,6 +1081,12 @@ class MotionCommand(CommandTermBase):
         if self._env.viewer and self._env.simulator.get_simulator_type() == SimulatorType.ISAACSIM:
             self._setup_visualization_markers_for_isaacsim()
 
+    def box_half_extents_view(self, ndim: int, device, dtype) -> torch.Tensor:
+        """The box half-extents the contact rewards read, for queries of ``ndim`` dimensions (N, ..., 3): here the
+        single box of ``grasp_settle_cfg.box_half_extents``, (3,). A subclass with one box per env returns
+        (num_envs,) + (1,) * (ndim - 2) + (3,), which box_geometry broadcasts against the queries."""
+        return torch.tensor(self.grasp_settle_cfg.box_half_extents, device=device, dtype=dtype)
+
     def _sample_reset_steps(self, env_ids: torch.Tensor) -> None:
         """Draw the motion of each reset env and its start time step: set ``self.motion_ids[env_ids]`` and
         ``self.time_steps[env_ids]`` (absolute indices on the concatenated timeline). Called first by reset();

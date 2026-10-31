@@ -32,7 +32,8 @@ def box_nearest_and_signed_distance(
 
     Args:
         p_local: (..., 3) query point(s) in the box's local frame.
-        half_extents: (3,) box half-extents (same box for every query -- rigid, constant geometry).
+        half_extents: (3,) box half-extents (same box for every query -- rigid, constant geometry), or one box per
+            query row, broadcastable to ``p_local`` (e.g. (N, 1, 3) for (N, K, 3) queries: one box per env).
 
     Returns:
         signed_dist: (...,) negative when ``p_local`` is inside the box.
@@ -54,7 +55,8 @@ def box_nearest_and_signed_distance(
     p_flat = p_local.reshape(-1, 3)
     axis_flat = min_axis.reshape(-1)
     nearest_inside_flat = p_flat.clone()
-    nearest_inside_flat[idx, axis_flat] = _safe_sign(p_flat[idx, axis_flat]) * half_extents[axis_flat]
+    half_flat = half_extents.expand_as(p_local).reshape(-1, 3)
+    nearest_inside_flat[idx, axis_flat] = _safe_sign(p_flat[idx, axis_flat]) * half_flat[idx, axis_flat]
     nearest_inside = nearest_inside_flat.reshape(*flat_shape, 3)
 
     nearest_local = torch.where(outside_mask.unsqueeze(-1), nearest_outside, nearest_inside)
@@ -81,7 +83,7 @@ def box_surface_geodesic_distance(
     Args:
         p1_local, p2_local: (..., 3) surface points, box-local frame (e.g. one from the retargeting
             reference witness, the other from ``box_nearest_and_signed_distance`` on the live sim).
-        half_extents: (3,) box half-extents.
+        half_extents: (3,) box half-extents, or one box per query row (broadcastable to ``p1_local``).
 
     Returns:
         (...,) geodesic distance estimate (metres). Exact for same-face and adjacent-face pairs;
@@ -109,8 +111,8 @@ def box_surface_geodesic_distance(
     p2_a1 = _gather(p2_local, axis1)
     p1_a3 = _gather(p1_local, axis3)
     p2_a3 = _gather(p2_local, axis3)
-    h_a2 = h[axis2]
-    h_a1 = h[axis1]
+    h_a2 = _gather(h.expand_as(p1_local), axis2)
+    h_a1 = _gather(h.expand_as(p1_local), axis1)
 
     u1 = (p1_a2 - sign2 * h_a2).abs()
     u2 = (p2_a1 - sign1 * h_a1).abs()

@@ -348,7 +348,7 @@ def object_surface_contact_error_exp(
     box_pos, box_quat = mc.simulator_object_pos_w, mc.simulator_object_quat_w
     p_local = quat_rotate_inverse(box_quat, a_pos_sim - box_pos, w_last=True)
 
-    half_extents = torch.tensor(mc.grasp_settle_cfg.box_half_extents, device=env.device, dtype=p_local.dtype)
+    half_extents = mc.box_half_extents_view(p_local.dim(), env.device, p_local.dtype)
     d_current, w_current = box_nearest_and_signed_distance(p_local, half_extents)
 
     geo = box_surface_geodesic_distance(w_ref, w_current, half_extents)
@@ -395,7 +395,7 @@ def object_flat_contact_quality_exp(
     offsets_r = (
         torch.tensor(offsets_r_cfg, device=env.device, dtype=torch.float32) if offsets_r_cfg is not None else offsets
     )
-    half = torch.tensor(mc.grasp_settle_cfg.box_half_extents, device=env.device, dtype=torch.float32)
+    half = mc.box_half_extents_view(3, env.device, torch.float32)  # against the (N, K, 3) keypoints
 
     def _flush_reward(a_pos: torch.Tensor, a_quat: torch.Tensor, off_env: torch.Tensor) -> torch.Tensor:
         # world keypoints: a_pos + R(a_quat) @ offset, per keypoint
@@ -765,9 +765,7 @@ class UndesiredContacts(RewardTermBase):
             obj_quat = mc.motion.object_quat_w[ts]  # (N,4) xyzw
             obj_quat_b = obj_quat.unsqueeze(1).expand(n, b, 4).reshape(n * b, 4)
             p_local = quat_rotate_inverse(obj_quat_b, (ref_pos - obj_pos).reshape(n * b, 3), w_last=True)
-            half = torch.tensor(
-                mc.grasp_settle_cfg.box_half_extents, device=ref_pos.device, dtype=ref_pos.dtype
-            )
+            half = mc.box_half_extents_view(3, ref_pos.device, ref_pos.dtype)  # against the (N, B, 3) bodies
             d_obj, _ = box_nearest_and_signed_distance(p_local.reshape(n, b, 3), half)  # (N,B)
             allowed = allowed | (d_obj < self.ref_contact_margin)
 
