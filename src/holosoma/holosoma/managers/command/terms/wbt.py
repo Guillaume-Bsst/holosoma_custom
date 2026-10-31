@@ -1081,13 +1081,11 @@ class MotionCommand(CommandTermBase):
         if self._env.viewer and self._env.simulator.get_simulator_type() == SimulatorType.ISAACSIM:
             self._setup_visualization_markers_for_isaacsim()
 
-    def reset(self, env_ids: torch.Tensor | None) -> None:
-        """called per reset_idx, reset timesteps and robot/object poses."""
-        env_ids = self._ensure_index_tensor(env_ids)
-        if env_ids.numel() == 0:
-            return
-
-        # 0. Sample the time steps
+    def _sample_reset_steps(self, env_ids: torch.Tensor) -> None:
+        """Draw the motion of each reset env and its start time step: set ``self.motion_ids[env_ids]`` and
+        ``self.time_steps[env_ids]`` (absolute indices on the concatenated timeline). Called first by reset();
+        moved out of it unchanged so that a subclass can draw otherwise."""
+        # Sample the time steps
         if self.motion_cfg.use_adaptive_timesteps_sampler:
             # Match BeyondMimic behavior: update failed bins from environments
             # that terminated before this reset, then sample new phases.
@@ -1133,6 +1131,16 @@ class MotionCommand(CommandTermBase):
         # Otherwise, update_tasks_callback will advance the timestep to the next timestep -> out of bounds error.
         already_last_timestep_mask = self.time_steps[env_ids] >= end_idx - 1
         self.time_steps[env_ids] = torch.where(already_last_timestep_mask, end_idx - 2, self.time_steps[env_ids])
+
+    def reset(self, env_ids: torch.Tensor | None) -> None:
+        """called per reset_idx, reset timesteps and robot/object poses."""
+        env_ids = self._ensure_index_tensor(env_ids)
+        if env_ids.numel() == 0:
+            return
+
+        # 0. Sample the motion of each env and its start time step (a subclass may draw otherwise)
+        self._sample_reset_steps(env_ids)
+        n = env_ids.numel()
 
         # --- grasp-settle: detect contact resets & prepare per-env init scaling -------------------
         # A reset frame is "in contact" if the nearest tracked hand is within contact_distance_threshold
